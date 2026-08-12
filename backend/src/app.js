@@ -34,6 +34,7 @@ if (!hasFrontendBuild) {
 }
 
 app.use('/api', cors(corsOptions), routes);
+app.use('/api', notFoundHandler);
 
 if (hasFrontendBuild) {
   app.use(express.static(frontendDistPath));

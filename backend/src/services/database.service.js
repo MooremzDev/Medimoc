@@ -22,7 +22,7 @@ class DatabaseService {
     const missing = getMissingDatabaseVariables();
 
     if (missing.length > 0) {
-      throw new AppError('Database configuration is incomplete.', 400, 'DB_CONFIG_INCOMPLETE', missing);
+      throw new AppError('A configuração da base de dados está incompleta.', 400, 'DB_CONFIG_INCOMPLETE', missing);
     }
 
     const config = {
@@ -85,7 +85,7 @@ class DatabaseService {
         logger.error('SQL Server connection failed', {
           message: error.message
         });
-        throw new AppError('Unable to connect to SQL Server.', 503, 'DB_CONNECTION_FAILED');
+        throw new AppError('Não foi possível ligar ao SQL Server.', 503, 'DB_CONNECTION_FAILED');
       });
 
     return this.poolPromise;
@@ -159,7 +159,7 @@ class DatabaseService {
       `);
 
     if (!result.recordset?.length) {
-      throw new AppError('Table not found in the configured database.', 404, 'TABLE_NOT_FOUND');
+      throw new AppError('Tabela não encontrada na base de dados configurada.', 404, 'TABLE_NOT_FOUND');
     }
   }
 

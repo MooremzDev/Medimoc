@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import dashboardRoutes from './dashboard.routes.js';
 import databaseRoutes from './database.routes.js';
 import healthRoutes from './health.routes.js';
 import primaveraRoutes from './primavera.routes.js';
@@ -17,6 +18,8 @@ router.get('/', (_req, res) => {
         databaseTables: '/api/database/tables',
         databaseColumns: '/api/database/columns',
         databaseRows: '/api/database/rows',
+        salesDashboard: '/api/dashboard/sales',
+        salesVendorDocuments: '/api/dashboard/sales/vendor-documents',
         selectQuery: '/api/database/select',
         primaveraModules: '/api/primavera/modules'
       }
@@ -25,6 +28,7 @@ router.get('/', (_req, res) => {
 });
 
 router.use('/health', healthRoutes);
+router.use('/dashboard', dashboardRoutes);
 router.use('/database', databaseRoutes);
 router.use('/primavera', primaveraRoutes);
 

@@ -29,7 +29,7 @@ export const errorHandler = (error, req, res, _next) => {
     success: false,
     error: {
       code,
-      message: isInternalError && !isDevelopment ? 'Internal server error.' : error.message,
+      message: isInternalError && !isDevelopment ? 'Erro interno do servidor.' : error.message,
       details: error.details
     }
   });

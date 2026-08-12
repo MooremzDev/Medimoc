@@ -139,6 +139,29 @@ GET /api/database/rows?schemaName=dbo&tableName=YourTable&limit=100
 
 These endpoints validate the table against SQL Server metadata before querying and only return read-only previews.
 
+### Sales Dashboard
+
+```http
+GET /api/dashboard/sales
+```
+
+Optional date range:
+
+```http
+GET /api/dashboard/sales?startDate=2023-01-01&endDate=2023-01-31
+```
+
+Returns a CabecDoc sales summary for the selected dates and the document types configured by:
+
+```env
+SALES_DOCUMENT_TYPES=FA,VD,NC
+PRIMAVERA_SCHEMA=dbo
+```
+
+The first dashboard uses `TotalMerc` as net sales, `TotalIva` as VAT, and `TotalMerc + TotalIva` as gross sales.
+
+It also returns a vendor breakdown from `CabecDoc.RespCobranca` joined to `Vendedores.Vendedor`. Vendor totals currently include only `FA` and `VD` documents.
+
 ## Security Notes
 
 - Database credentials are read only by the backend from `backend/.env`.

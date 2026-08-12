@@ -28,6 +28,19 @@ const parseBoolean = (name, fallback) => {
   return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
 };
 
+const parseList = (name, fallback = []) => {
+  const value = process.env[name];
+
+  if (!value) {
+    return fallback;
+  }
+
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: parseNumber('PORT', 5000),
@@ -35,6 +48,8 @@ export const env = {
   logLevel: process.env.LOG_LEVEL ?? 'info',
   jsonBodyLimit: process.env.JSON_BODY_LIMIT ?? '1mb',
   maxSelectRows: parseNumber('MAX_SELECT_ROWS', 1000),
+  primaveraSchema: process.env.PRIMAVERA_SCHEMA ?? 'dbo',
+  salesDocumentTypes: parseList('SALES_DOCUMENT_TYPES', ['FA', 'VD', 'NC']),
   db: {
     server: process.env.DB_SERVER,
     instance: process.env.DB_INSTANCE,

@@ -3,7 +3,7 @@ import { env } from '../config/env.js';
 import { isSafeSelectQuery } from '../utils/queryGuard.js';
 
 const parameterNameSchema = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, {
-  message: 'Parameter names must contain only letters, numbers, and underscores, and cannot start with a number.'
+  message: 'Os nomes dos parâmetros só podem conter letras, números e underscores, e não podem começar por número.'
 });
 
 const parameterValueSchema = z.union([
@@ -15,7 +15,7 @@ const parameterValueSchema = z.union([
 
 export const selectQuerySchema = z.object({
   query: z.string().trim().min(1).max(10000).refine(isSafeSelectQuery, {
-    message: 'Only single SELECT statements with named parameters are allowed.'
+    message: 'Só são permitidas consultas SELECT únicas com parâmetros nomeados.'
   }),
   parameters: z.record(parameterNameSchema, parameterValueSchema).default({}),
   maxRows: z.number().int().positive().max(env.maxSelectRows).optional()

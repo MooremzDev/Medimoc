@@ -10,7 +10,7 @@ export const testDatabaseConnection = asyncHandler(async (_req, res) => {
       success: false,
       error: {
         code: 'DB_CONFIG_INCOMPLETE',
-        message: 'Database configuration is incomplete.',
+        message: 'A configuração da base de dados está incompleta.',
         details: missing
       }
     });

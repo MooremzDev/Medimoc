@@ -6,7 +6,7 @@ export const validateBody = (schema) => (req, _res, next) => {
   if (!result.success) {
     next(
       new AppError(
-        'Invalid request payload.',
+        'Pedido inválido.',
         400,
         'VALIDATION_ERROR',
         result.error.issues.map((issue) => ({
@@ -28,7 +28,7 @@ export const validateQuery = (schema) => (req, _res, next) => {
   if (!result.success) {
     next(
       new AppError(
-        'Invalid query string.',
+        'Parâmetros de consulta inválidos.',
         400,
         'VALIDATION_ERROR',
         result.error.issues.map((issue) => ({

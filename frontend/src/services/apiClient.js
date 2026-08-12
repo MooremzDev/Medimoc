@@ -22,10 +22,14 @@ const request = async (path, options = {}) => {
 
   if (!response.ok) {
     throw new ApiError(
-      payload?.error?.message ?? 'Request failed.',
+      payload?.error?.message ?? 'Pedido falhou.',
       response.status,
       payload?.error?.details
     );
+  }
+
+  if (!payload) {
+    throw new ApiError('Resposta inválida da API. Confirme que o backend foi reiniciado.', response.status);
   }
 
   return payload;

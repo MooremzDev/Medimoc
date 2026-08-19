@@ -1,12 +1,17 @@
 ﻿import {
   Activity,
+  Banknote,
   Blocks,
+  CalendarDays,
   Columns3,
   Database,
   Eye,
+  FileText,
   Package,
+  Percent,
   Play,
   RefreshCw,
+  ReceiptText,
   Search,
   Server,
   Settings,
@@ -35,6 +40,28 @@ const defaultQuery = 'SELECT TOP (@limit) * FROM INFORMATION_SCHEMA.TABLES WHERE
 const defaultParameters = JSON.stringify({ limit: 20, tableType: 'BASE TABLE' }, null, 2);
 const monthlySalesGoal = 3_200_189;
 const defaultSalesDateRange = getCurrentMonthRange();
+const createSalesDashboardState = () => ({ loading: false, data: null, error: null });
+const createVendorDocumentsState = () => ({ loading: false, rows: [], error: null });
+const salesDocumentColumns = [
+  'documentDate',
+  'documentType',
+  'documentNumber',
+  'entityCode',
+  'currency',
+  'netSales',
+  'vatTotal',
+  'grossSales'
+];
+const salesDocumentColumnLabels = {
+  documentDate: 'Data',
+  documentType: 'Tipo',
+  documentNumber: 'Número',
+  entityCode: 'Entidade',
+  currency: 'Moeda',
+  netSales: 'Vendas sem IVA',
+  vatTotal: 'IVA',
+  grossSales: 'Vendas com IVA'
+};
 
 const statusText = {
   idle: 'Inativo',
@@ -119,6 +146,81 @@ function MonthlyGoalCard({ actualSales, hasResult, loading, periodLabel }) {
   );
 }
 
+function SalesDateFilter({
+  dateRange,
+  idPrefix,
+  loading,
+  onClear,
+  onDateRangeChange,
+  onSubmit
+}) {
+  return (
+    <form className="date-filter" onSubmit={onSubmit}>
+      <div>
+        <label htmlFor={`${idPrefix}-start-date`}>Data inicial</label>
+        <input
+          id={`${idPrefix}-start-date`}
+          type="date"
+          value={dateRange.startDate}
+          onChange={(event) => onDateRangeChange((current) => ({
+            ...current,
+            startDate: event.target.value
+          }))}
+        />
+      </div>
+      <div>
+        <label htmlFor={`${idPrefix}-end-date`}>Data final</label>
+        <input
+          id={`${idPrefix}-end-date`}
+          type="date"
+          value={dateRange.endDate}
+          onChange={(event) => onDateRangeChange((current) => ({
+            ...current,
+            endDate: event.target.value
+          }))}
+        />
+      </div>
+      <button className="primary-button compact" type="submit" disabled={loading}>
+        <CalendarDays size={15} aria-hidden="true" />
+        Aplicar
+      </button>
+      <button className="secondary-button compact" type="button" onClick={onClear} disabled={loading}>
+        <RefreshCw size={15} aria-hidden="true" />
+        Mês atual
+      </button>
+    </form>
+  );
+}
+
+function SalesPeriodShortcuts({ dateRange, loading, onSelectPeriod }) {
+  const shortcuts = [
+    { key: 'day', label: 'Hoje', range: getCurrentDayRange() },
+    { key: 'month', label: 'Mês', range: getCurrentMonthRange() },
+    { key: 'year', label: 'Ano', range: getCurrentYearRange() }
+  ];
+
+  return (
+    <div className="period-toggle" role="group" aria-label="Período de vendas">
+      {shortcuts.map((shortcut) => {
+        const isActive = isSameDateRange(dateRange, shortcut.range);
+
+        return (
+          <button
+            className={isActive ? 'active' : ''}
+            key={shortcut.key}
+            type="button"
+            onClick={() => onSelectPeriod(shortcut.range)}
+            disabled={loading}
+            aria-pressed={isActive}
+          >
+            {shortcut.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ModuleTile({ module }) {
   return (
     <article className="module-tile">
@@ -169,6 +271,18 @@ function ResultsTable({ result }) {
   );
 }
 
+function SalesDocumentsTable({ rows }) {
+  return (
+    <ResultsTable
+      result={{
+        columns: salesDocumentColumns,
+        columnLabels: salesDocumentColumnLabels,
+        rows
+      }}
+    />
+  );
+}
+
 function formatRowCount(value) {
   if (value === null || value === undefined) return 'desconhecido';
   return Number(value).toLocaleString('pt-PT');
@@ -214,6 +328,29 @@ function getCurrentMonthRange(referenceDate = new Date()) {
     startDate: formatDateInputValue(startDate),
     endDate: formatDateInputValue(endDate)
   };
+}
+
+function getCurrentDayRange(referenceDate = new Date()) {
+  const date = formatDateInputValue(referenceDate);
+
+  return {
+    startDate: date,
+    endDate: date
+  };
+}
+
+function getCurrentYearRange(referenceDate = new Date()) {
+  const startDate = new Date(referenceDate.getFullYear(), 0, 1);
+  const endDate = new Date(referenceDate.getFullYear(), 11, 31);
+
+  return {
+    startDate: formatDateInputValue(startDate),
+    endDate: formatDateInputValue(endDate)
+  };
+}
+
+function isSameDateRange(left, right) {
+  return left?.startDate === right?.startDate && left?.endDate === right?.endDate;
 }
 
 function getMonthStart(date) {
@@ -642,16 +779,99 @@ function MonthlySalesLineChart({ items, loading }) {
   );
 }
 
+function SalesPage({
+  activePeriodLabel,
+  salesComparisonMonths,
+  salesDashboard,
+  salesDateRange,
+  onSelectPeriod,
+}) {
+  const summary = salesDashboard.data?.summary ?? null;
+  const documentCount = Number(summary?.documentCount ?? 0);
+  const netSales = Number(summary?.netSales ?? 0);
+  const grossSales = Number(summary?.grossSales ?? 0);
+  const vatTotal = Number(summary?.vatTotal ?? 0);
+  const averageDocumentValue = documentCount > 0 ? grossSales / documentCount : 0;
+  const hasResult = Boolean(salesDashboard.data);
+
+  return (
+    <section className="sales-page">
+      <div className="section-heading sales-page-heading">
+        <div>
+          <p className="eyebrow">Vendas</p>
+          <h2>Gestão de vendas</h2>
+        </div>
+        <div className="sales-heading-actions">
+          <SalesPeriodShortcuts
+            dateRange={salesDateRange}
+            loading={salesDashboard.loading}
+            onSelectPeriod={onSelectPeriod}
+          />
+          <span className="pill">{activePeriodLabel}</span>
+        </div>
+      </div>
+
+      {salesDashboard.error ? <div className="error-banner">{salesDashboard.error}</div> : null}
+
+      <div className="sales-kpi-grid">
+        <StatusCard
+          icon={Banknote}
+          label="Vendas sem IVA"
+          value={salesDashboard.loading ? 'A carregar' : formatAmount(netSales)}
+          tone="success"
+          detail={hasResult ? `Total líquido em ${activePeriodLabel}` : 'Sem vendas disponíveis no período'}
+        />
+        <StatusCard
+          icon={ReceiptText}
+          label="Vendas com IVA"
+          value={salesDashboard.loading ? 'A carregar' : formatAmount(grossSales)}
+          tone="neutral"
+          detail={hasResult ? `Valor bruto em ${activePeriodLabel}` : 'Sem vendas disponíveis no período'}
+        />
+        <StatusCard
+          icon={Percent}
+          label="IVA"
+          value={salesDashboard.loading ? 'A carregar' : formatAmount(vatTotal)}
+          tone="neutral"
+          detail={hasResult ? `IVA liquidado em ${activePeriodLabel}` : 'Sem IVA disponível no período'}
+        />
+        <StatusCard
+          icon={FileText}
+          label="Documentos"
+          value={salesDashboard.loading ? 'A carregar' : formatRowCount(documentCount)}
+          tone="neutral"
+          detail={hasResult ? `Ticket médio ${formatAmount(averageDocumentValue)}` : 'Sem documentos disponíveis'}
+        />
+      </div>
+
+      <div className="sales-main-grid">
+        <MonthlySalesLineChart
+          items={salesComparisonMonths}
+          loading={salesDashboard.loading}
+        />
+        <MonthlyGoalCard
+          actualSales={summary?.netSales}
+          hasResult={hasResult}
+          loading={salesDashboard.loading}
+          periodLabel={activePeriodLabel}
+        />
+      </div>
+    </section>
+  );
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [health, setHealth] = useState({ status: 'idle', data: null, error: null });
   const [database, setDatabase] = useState({ status: 'idle', data: null, error: null });
   const [modules, setModules] = useState([]);
-  const [salesDashboard, setSalesDashboard] = useState({ loading: false, data: null, error: null });
-  const [salesDateRange, setSalesDateRange] = useState(defaultSalesDateRange);
-  const [selectedVendor, setSelectedVendor] = useState(null);
-  const [vendorDocuments, setVendorDocuments] = useState({ loading: false, rows: [], error: null });
+  const [generalSalesDashboard, setGeneralSalesDashboard] = useState(createSalesDashboardState);
+  const [generalSalesDateRange, setGeneralSalesDateRange] = useState(defaultSalesDateRange);
+  const [generalSelectedVendor, setGeneralSelectedVendor] = useState(null);
+  const [generalVendorDocuments, setGeneralVendorDocuments] = useState(createVendorDocumentsState);
+  const [vendasSalesDashboard, setVendasSalesDashboard] = useState(createSalesDashboardState);
+  const [vendasSalesDateRange, setVendasSalesDateRange] = useState(defaultSalesDateRange);
   const [tableSearch, setTableSearch] = useState('');
   const [tablesState, setTablesState] = useState({ loading: false, tables: [], error: null });
   const [selectedTable, setSelectedTable] = useState(null);
@@ -672,19 +892,27 @@ export default function App() {
   const activePageInfo = pages[activePage] ?? pages.dashboard;
   const ActivePageIcon = activePageInfo.icon;
   const isSettingsPage = settingsNavigationItems.some((item) => item.key === activePage);
-  const salesSummary = salesDashboard.data?.summary ?? null;
-  const activeSalesDateRange = salesDashboard.data?.dateRange ?? salesDateRange;
-  const activePeriodLabel = useMemo(
-    () => formatDateRangeLabel(activeSalesDateRange),
-    [activeSalesDateRange]
+  const generalSalesSummary = generalSalesDashboard.data?.summary ?? null;
+  const generalActiveSalesDateRange = generalSalesDashboard.data?.dateRange ?? generalSalesDateRange;
+  const generalActivePeriodLabel = useMemo(
+    () => formatDateRangeLabel(generalActiveSalesDateRange),
+    [generalActiveSalesDateRange]
   );
-  const salesComparisonMonths = salesDashboard.data?.comparisonMonths ?? salesDashboard.data?.byMonth ?? [];
-  const visibleRecentDocuments = selectedVendor
-    ? vendorDocuments.rows
-    : salesDashboard.data?.recentDocuments ?? [];
-  const recentDocumentsTitle = selectedVendor
-    ? `Documentos recentes - ${selectedVendor.name}`
+  const generalSalesComparisonMonths =
+    generalSalesDashboard.data?.comparisonMonths ?? generalSalesDashboard.data?.byMonth ?? [];
+  const generalVisibleRecentDocuments = generalSelectedVendor
+    ? generalVendorDocuments.rows
+    : generalSalesDashboard.data?.recentDocuments ?? [];
+  const generalRecentDocumentsTitle = generalSelectedVendor
+    ? `Documentos recentes - ${generalSelectedVendor.name}`
     : 'Documentos de venda recentes';
+  const vendasActiveSalesDateRange = vendasSalesDashboard.data?.dateRange ?? vendasSalesDateRange;
+  const vendasActivePeriodLabel = useMemo(
+    () => formatDateRangeLabel(vendasActiveSalesDateRange),
+    [vendasActiveSalesDateRange]
+  );
+  const vendasSalesComparisonMonths =
+    vendasSalesDashboard.data?.comparisonMonths ?? vendasSalesDashboard.data?.byMonth ?? [];
 
   const databaseDetail = useMemo(() => {
     if (database.data?.databaseName) return database.data.databaseName;
@@ -723,10 +951,15 @@ export default function App() {
     }
   };
 
-  const loadSalesDashboard = async (filters = salesDateRange) => {
-    setSalesDashboard((current) => ({ ...current, loading: true, error: null }));
-    setSelectedVendor(null);
-    setVendorDocuments({ loading: false, rows: [], error: null });
+  const loadSalesDashboardData = async ({
+    filters,
+    setDashboard,
+    setSelectedVendor,
+    setVendorDocuments
+  }) => {
+    setDashboard((current) => ({ ...current, loading: true, error: null }));
+    setSelectedVendor?.(null);
+    setVendorDocuments?.(createVendorDocumentsState());
 
     try {
       const comparisonDateRange = getSalesComparisonDateRange(filters);
@@ -736,7 +969,7 @@ export default function App() {
       ]);
       const comparisonMonths = buildSalesComparisonMonths(comparisonResponse.data?.byMonth, filters);
 
-      setSalesDashboard({
+      setDashboard({
         loading: false,
         data: {
           ...response.data,
@@ -745,19 +978,36 @@ export default function App() {
         error: null
       });
     } catch (error) {
-      setSalesDashboard({ loading: false, data: null, error: error.message });
+      setDashboard({ loading: false, data: null, error: error.message });
     }
   };
 
-  const loadVendorDocuments = async (vendor) => {
+  const loadGeneralSalesDashboard = (filters = generalSalesDateRange) => loadSalesDashboardData({
+    filters,
+    setDashboard: setGeneralSalesDashboard,
+    setSelectedVendor: setGeneralSelectedVendor,
+    setVendorDocuments: setGeneralVendorDocuments
+  });
+
+  const loadVendasSalesDashboard = (filters = vendasSalesDateRange) => loadSalesDashboardData({
+    filters,
+    setDashboard: setVendasSalesDashboard
+  });
+
+  const loadVendorDocumentsForView = async ({
+    dateRange,
+    setSelectedVendor,
+    setVendorDocuments,
+    vendor
+  }) => {
     setSelectedVendor(vendor);
     setVendorDocuments({ loading: true, rows: [], error: null });
 
     try {
       const response = await getVendorDocuments({
         vendorCode: vendor.code,
-        startDate: activeSalesDateRange.startDate,
-        endDate: activeSalesDateRange.endDate,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
         limit: 12
       });
 
@@ -771,9 +1021,16 @@ export default function App() {
     }
   };
 
-  const clearVendorDocuments = () => {
-    setSelectedVendor(null);
-    setVendorDocuments({ loading: false, rows: [], error: null });
+  const loadGeneralVendorDocuments = (vendor) => loadVendorDocumentsForView({
+    dateRange: generalActiveSalesDateRange,
+    setSelectedVendor: setGeneralSelectedVendor,
+    setVendorDocuments: setGeneralVendorDocuments,
+    vendor
+  });
+
+  const clearGeneralVendorDocuments = () => {
+    setGeneralSelectedVendor(null);
+    setGeneralVendorDocuments(createVendorDocumentsState());
   };
 
   const selectDatabaseTable = async (table, limit = previewLimit) => {
@@ -824,15 +1081,20 @@ export default function App() {
     }
   };
 
-  const submitSalesDateRange = (event) => {
+  const submitGeneralSalesDateRange = (event) => {
     event.preventDefault();
-    loadSalesDashboard(salesDateRange);
+    loadGeneralSalesDashboard(generalSalesDateRange);
   };
 
-  const clearSalesDateRange = () => {
+  const clearGeneralSalesDateRange = () => {
     const currentMonthRange = getCurrentMonthRange();
-    setSalesDateRange(currentMonthRange);
-    loadSalesDashboard(currentMonthRange);
+    setGeneralSalesDateRange(currentMonthRange);
+    loadGeneralSalesDashboard(currentMonthRange);
+  };
+
+  const applyVendasSalesDatePreset = (dateRange) => {
+    setVendasSalesDateRange(dateRange);
+    loadVendasSalesDashboard(dateRange);
   };
 
   const submitTableSearch = (event) => {
@@ -866,13 +1128,24 @@ export default function App() {
 
   useEffect(() => {
     refreshStatus();
-    loadSalesDashboard();
+    loadGeneralSalesDashboard();
     loadModules();
   }, []);
 
   useEffect(() => {
     if (activePage === 'data' && !tablesState.loading && tablesState.tables.length === 0) {
       loadTables('');
+    }
+  }, [activePage]);
+
+  useEffect(() => {
+    if (
+      activePage === 'sales' &&
+      !vendasSalesDashboard.loading &&
+      !vendasSalesDashboard.data &&
+      !vendasSalesDashboard.error
+    ) {
+      loadVendasSalesDashboard();
     }
   }, [activePage]);
 
@@ -957,7 +1230,14 @@ export default function App() {
             type="button"
             onClick={() => {
               refreshStatus();
-              loadSalesDashboard();
+              if (activePage === 'sales') {
+                loadVendasSalesDashboard();
+                return;
+              }
+
+              if (activePage === 'dashboard') {
+                loadGeneralSalesDashboard();
+              }
             }}
             aria-label="Atualizar painel"
           >
@@ -971,81 +1251,57 @@ export default function App() {
               <div>
                 <h2>Resumo mensal de vendas</h2>
               </div>
-              <span className="pill">{activePeriodLabel}</span>
+              <span className="pill">{generalActivePeriodLabel}</span>
             </div>
 
-            <form className="date-filter" onSubmit={submitSalesDateRange}>
-              <div>
-                <label htmlFor="startDate">Data inicial</label>
-                <input
-                  id="startDate"
-                  type="date"
-                  value={salesDateRange.startDate}
-                  onChange={(event) => setSalesDateRange((current) => ({
-                    ...current,
-                    startDate: event.target.value
-                  }))}
-                />
-              </div>
-              <div>
-                <label htmlFor="endDate">Data final</label>
-                <input
-                  id="endDate"
-                  type="date"
-                  value={salesDateRange.endDate}
-                  onChange={(event) => setSalesDateRange((current) => ({
-                    ...current,
-                    endDate: event.target.value
-                  }))}
-                />
-              </div>
-              <button className="primary-button compact" type="submit" disabled={salesDashboard.loading}>
-                Aplicar
-              </button>
-              <button className="secondary-button compact" type="button" onClick={clearSalesDateRange}>
-                Mês atual
-              </button>
-            </form>
+            <SalesDateFilter
+              dateRange={generalSalesDateRange}
+              idPrefix="dashboard-sales"
+              loading={generalSalesDashboard.loading}
+              onClear={clearGeneralSalesDateRange}
+              onDateRangeChange={setGeneralSalesDateRange}
+              onSubmit={submitGeneralSalesDateRange}
+            />
 
-            {salesDashboard.error ? <div className="error-banner">{salesDashboard.error}</div> : null}
+            {generalSalesDashboard.error ? <div className="error-banner">{generalSalesDashboard.error}</div> : null}
 
             <div className="metric-grid">
               <StatusCard
                 icon={Database}
                 label="Vendas"
-                value={salesDashboard.loading ? 'A carregar' : formatAmount(salesSummary?.netSales)}
+                value={generalSalesDashboard.loading ? 'A carregar' : formatAmount(generalSalesSummary?.netSales)}
                 tone="success"
-                detail={salesDashboard.data
-                  ? `Total de vendas no período ${activePeriodLabel}`
+                detail={generalSalesDashboard.data
+                  ? `Total de vendas no período ${generalActivePeriodLabel}`
                   : 'Sem vendas disponíveis no período'}
               />
               <StatusCard
                 icon={Table2}
                 label="Documentos"
                 value={
-                  salesDashboard.loading
+                  generalSalesDashboard.loading
                     ? 'A carregar'
-                    : formatRowCount(salesSummary?.documentCount ?? 0)
+                    : formatRowCount(generalSalesSummary?.documentCount ?? 0)
                 }
                 tone="neutral"
-                detail={salesDashboard.data
-                  ? `Documentos emitidos no período ${activePeriodLabel}`
+                detail={generalSalesDashboard.data
+                  ? `Documentos emitidos no período ${generalActivePeriodLabel}`
                   : 'Sem documentos disponíveis no período'}
               />
               <MonthlyGoalCard
-                actualSales={salesSummary?.netSales}
-                hasResult={Boolean(salesDashboard.data)}
-                loading={salesDashboard.loading}
-                periodLabel={activePeriodLabel}
+                actualSales={generalSalesSummary?.netSales}
+                hasResult={Boolean(generalSalesDashboard.data)}
+                loading={generalSalesDashboard.loading}
+                periodLabel={generalActivePeriodLabel}
               />
             </div>
 
             <MonthlySalesLineChart
-              items={salesComparisonMonths}
-              loading={salesDashboard.loading}
+              items={generalSalesComparisonMonths}
+              loading={generalSalesDashboard.loading}
             />
 
-            <SalesPieChart items={salesDashboard.data?.byDocumentType ?? []} />
+            <SalesPieChart items={generalSalesDashboard.data?.byDocumentType ?? []} />
 
             <div className="dashboard-details">
               <section className="detail-panel">
@@ -1053,7 +1309,7 @@ export default function App() {
                   <Table2 size={18} aria-hidden="true" />
                   <span>Tipos de documento</span>
                 </div>
-                <DocumentTypeVerticalChart items={salesDashboard.data?.byDocumentType ?? []} />
+                <DocumentTypeVerticalChart items={generalSalesDashboard.data?.byDocumentType ?? []} />
               </section>
 
               <section className="detail-panel vendor-panel">
@@ -1065,9 +1321,9 @@ export default function App() {
                   Totais calculados apenas com documentos FA e VD, usando o responsável de cobrança do documento.
                 </p>
                 <VendorBarChart
-                  items={salesDashboard.data?.byVendor ?? []}
-                  onSelectVendor={loadVendorDocuments}
-                  selectedVendorCode={selectedVendor?.code}
+                  items={generalSalesDashboard.data?.byVendor ?? []}
+                  onSelectVendor={loadGeneralVendorDocuments}
+                  selectedVendorCode={generalSelectedVendor?.code}
                 />
               </section>
             </div>
@@ -1075,58 +1331,35 @@ export default function App() {
             <section className="detail-panel recent-documents-panel">
                 <div className="panel-heading">
                   <Table2 size={18} aria-hidden="true" />
-                  <span>{recentDocumentsTitle}</span>
-                  {selectedVendor ? (
-                    <button className="text-button" type="button" onClick={clearVendorDocuments}>
+                  <span>{generalRecentDocumentsTitle}</span>
+                  {generalSelectedVendor ? (
+                    <button className="text-button" type="button" onClick={clearGeneralVendorDocuments}>
                       Ver todos
                     </button>
                   ) : null}
                 </div>
-                {vendorDocuments.loading ? (
+                {generalVendorDocuments.loading ? (
                   <div className="empty-state compact-empty-state">
                     <RefreshCw size={18} aria-hidden="true" />
                     <span>A carregar documentos do vendedor</span>
                   </div>
                 ) : null}
-                {vendorDocuments.error ? <div className="error-banner">{vendorDocuments.error}</div> : null}
-                {!vendorDocuments.loading ? (
-                  <ResultsTable
-                    result={{
-                      columns: [
-                        'documentDate',
-                        'documentType',
-                        'documentNumber',
-                        'entityCode',
-                        'currency',
-                        'netSales',
-                        'vatTotal',
-                        'grossSales'
-                      ],
-                      columnLabels: {
-                        documentDate: 'Data',
-                        documentType: 'Tipo',
-                      documentNumber: 'Número',
-                        entityCode: 'Entidade',
-                        currency: 'Moeda',
-                        netSales: 'Vendas sem IVA',
-                        vatTotal: 'IVA',
-                        grossSales: 'Vendas com IVA'
-                      },
-                      rows: visibleRecentDocuments
-                    }}
-                  />
+                {generalVendorDocuments.error ? <div className="error-banner">{generalVendorDocuments.error}</div> : null}
+                {!generalVendorDocuments.loading ? (
+                  <SalesDocumentsTable rows={generalVisibleRecentDocuments} />
                 ) : null}
               </section>
           </section>
         ) : null}
 
         {activePage === 'sales' ? (
-          <section className="sales-page">
-            <MonthlySalesLineChart
-              items={salesComparisonMonths}
-              loading={salesDashboard.loading}
-            />
-          </section>
+          <SalesPage
+            activePeriodLabel={vendasActivePeriodLabel}
+            salesComparisonMonths={vendasSalesComparisonMonths}
+            salesDashboard={vendasSalesDashboard}
+            salesDateRange={vendasSalesDateRange}
+            onSelectPeriod={applyVendasSalesDatePreset}
+          />
         ) : null}
 
         {['customers', 'products'].includes(activePage) ? (

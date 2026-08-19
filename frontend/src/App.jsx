@@ -6,7 +6,9 @@
   Columns3,
   Database,
   Eye,
+  Filter,
   FileText,
+  MapPin,
   Package,
   Percent,
   Play,
@@ -20,8 +22,10 @@
   Table2,
   TerminalSquare,
   Target,
+  Tags,
   TrendingUp,
-  Users
+  Users,
+  X
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -32,6 +36,7 @@ import {
   getHealth,
   getPrimaveraModules,
   getSalesDashboard,
+  getVendasDashboard,
   getVendorDocuments,
   testDatabaseConnection
 } from './services/databaseApi.js';
@@ -40,8 +45,21 @@ const defaultQuery = 'SELECT TOP (@limit) * FROM INFORMATION_SCHEMA.TABLES WHERE
 const defaultParameters = JSON.stringify({ limit: 20, tableType: 'BASE TABLE' }, null, 2);
 const monthlySalesGoal = 3_200_189;
 const defaultSalesDateRange = getCurrentMonthRange();
+const defaultVendasFilters = {
+  familyCode: '',
+  productCode: '',
+  vendorCode: '',
+  brandCode: '',
+  province: ''
+};
 const createSalesDashboardState = () => ({ loading: false, data: null, error: null });
 const createVendorDocumentsState = () => ({ loading: false, rows: [], error: null });
+const createVendasFilters = () => ({ ...defaultVendasFilters });
+const vendasPeriodLabels = {
+  day: 'Hoje',
+  month: 'Mês',
+  year: 'Ano'
+};
 const salesDocumentColumns = [
   'documentDate',
   'documentType',
@@ -192,24 +210,24 @@ function SalesDateFilter({
   );
 }
 
-function SalesPeriodShortcuts({ dateRange, loading, onSelectPeriod }) {
+function SalesPeriodShortcuts({ loading, onSelectPeriod, period }) {
   const shortcuts = [
-    { key: 'day', label: 'Hoje', range: getCurrentDayRange() },
-    { key: 'month', label: 'Mês', range: getCurrentMonthRange() },
-    { key: 'year', label: 'Ano', range: getCurrentYearRange() }
+    { key: 'day', label: 'Hoje' },
+    { key: 'month', label: 'Mês' },
+    { key: 'year', label: 'Ano' }
   ];
 
   return (
     <div className="period-toggle" role="group" aria-label="Período de vendas">
       {shortcuts.map((shortcut) => {
-        const isActive = isSameDateRange(dateRange, shortcut.range);
+        const isActive = period === shortcut.key;
 
         return (
           <button
             className={isActive ? 'active' : ''}
             key={shortcut.key}
             type="button"
-            onClick={() => onSelectPeriod(shortcut.range)}
+            onClick={() => onSelectPeriod(shortcut.key)}
             disabled={loading}
             aria-pressed={isActive}
           >
@@ -328,29 +346,6 @@ function getCurrentMonthRange(referenceDate = new Date()) {
     startDate: formatDateInputValue(startDate),
     endDate: formatDateInputValue(endDate)
   };
-}
-
-function getCurrentDayRange(referenceDate = new Date()) {
-  const date = formatDateInputValue(referenceDate);
-
-  return {
-    startDate: date,
-    endDate: date
-  };
-}
-
-function getCurrentYearRange(referenceDate = new Date()) {
-  const startDate = new Date(referenceDate.getFullYear(), 0, 1);
-  const endDate = new Date(referenceDate.getFullYear(), 11, 31);
-
-  return {
-    startDate: formatDateInputValue(startDate),
-    endDate: formatDateInputValue(endDate)
-  };
-}
-
-function isSameDateRange(left, right) {
-  return left?.startDate === right?.startDate && left?.endDate === right?.endDate;
 }
 
 function getMonthStart(date) {
@@ -779,15 +774,223 @@ function MonthlySalesLineChart({ items, loading }) {
   );
 }
 
+function hasActiveVendasFilters(filters) {
+  return Object.values(filters ?? {}).some(Boolean);
+}
+
+function getFilterOptionsWithSelection(options = [], selectedValue) {
+  if (!selectedValue || options.some((option) => String(option.value) === String(selectedValue))) {
+    return options;
+  }
+
+  return [{ value: selectedValue, label: selectedValue }, ...options];
+}
+
+function formatFilterOptionLabel(option) {
+  if (!option?.label || String(option.label) === String(option.value)) {
+    return option?.value ?? '';
+  }
+
+  return `${option.label} (${option.value})`;
+}
+
+function VendasFilterBar({ filterOptions, filters, loading, onClearFilters, onFilterChange }) {
+  const filterConfigs = [
+    { key: 'familyCode', placeholder: 'Todas as famílias', options: filterOptions?.families ?? [] },
+    { key: 'productCode', placeholder: 'Todos os produtos', options: filterOptions?.products ?? [] },
+    { key: 'vendorCode', placeholder: 'Todos os vendedores', options: filterOptions?.vendors ?? [] },
+    { key: 'brandCode', placeholder: 'Todas as marcas', options: filterOptions?.brands ?? [] },
+    { key: 'province', placeholder: 'Todas as províncias', options: filterOptions?.provinces ?? [] }
+  ];
+  const hasFilters = hasActiveVendasFilters(filters);
+
+  return (
+    <div className="sales-filter-bar" aria-label="Filtros de vendas">
+      {filterConfigs.map((config) => (
+        <select
+          aria-label={config.placeholder}
+          key={config.key}
+          value={filters[config.key] ?? ''}
+          onChange={(event) => onFilterChange(config.key, event.target.value)}
+          disabled={loading}
+        >
+          <option value="">{config.placeholder}</option>
+          {getFilterOptionsWithSelection(config.options, filters[config.key]).map((option) => (
+            <option key={`${config.key}-${option.value}`} value={option.value}>
+              {formatFilterOptionLabel(option)}
+            </option>
+          ))}
+        </select>
+      ))}
+      <button
+        className="secondary-button compact"
+        type="button"
+        onClick={onClearFilters}
+        disabled={loading || !hasFilters}
+      >
+        <X size={15} aria-hidden="true" />
+        Limpar
+      </button>
+    </div>
+  );
+}
+
+function formatVendasTrendLabel(label, period) {
+  if (period === 'year') {
+    return formatMonthLabel(label);
+  }
+
+  if (period === 'month' && /^\d{4}-\d{2}-\d{2}$/.test(String(label))) {
+    return new Intl.DateTimeFormat('pt-PT', {
+      day: '2-digit',
+      month: '2-digit'
+    }).format(new Date(label));
+  }
+
+  return label;
+}
+
+function VendasTrendChart({ items, loading, period }) {
+  const rows = (items ?? []).map((item) => ({
+    label: item.label,
+    documents: Number(item.documentCount ?? 0),
+    lines: Number(item.lineCount ?? 0),
+    value: Number(item.grossSales ?? 0)
+  }));
+  const maxValue = rows.reduce((max, item) => Math.max(max, Math.abs(item.value)), 0);
+  const title = {
+    day: 'Vendas por hora',
+    month: 'Vendas por dia',
+    year: 'Vendas por mês'
+  }[period] ?? 'Evolução das vendas';
+
+  return (
+    <section className="detail-panel vendas-trend-panel">
+      <div className="panel-heading">
+        <TrendingUp size={18} aria-hidden="true" />
+        <span>{title}</span>
+      </div>
+
+      {loading ? (
+        <div className="empty-state compact-empty-state">
+          <RefreshCw size={18} aria-hidden="true" />
+          <span>A carregar vendas</span>
+        </div>
+      ) : null}
+
+      {!loading && !rows.length ? (
+        <div className="empty-state compact-empty-state">
+          <Table2 size={18} aria-hidden="true" />
+          <span>Sem vendas para apresentar</span>
+        </div>
+      ) : null}
+
+      {!loading && rows.length ? (
+        <div className="vendas-trend-bars" aria-label={title}>
+          {rows.map((item) => {
+            const height = maxValue > 0 ? Math.max((Math.abs(item.value) / maxValue) * 100, 6) : 0;
+
+            return (
+              <article className="vendas-trend-item" key={item.label}>
+                <div className="vendas-trend-track">
+                  <span style={{ height: `${height}%` }} />
+                </div>
+                <strong>{formatVendasTrendLabel(item.label, period)}</strong>
+                <em>{formatCompactAmount(item.value)}</em>
+              </article>
+            );
+          })}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function SalesBreakdownPanel({
+  activeValue,
+  filterKey,
+  icon: Icon = Filter,
+  items,
+  loading,
+  onSelectFilter,
+  title
+}) {
+  const rows = (items ?? []).map((item) => ({
+    code: item.code,
+    label: item.label,
+    documents: Number(item.documentCount ?? 0),
+    lines: Number(item.lineCount ?? 0),
+    value: Number(item.grossSales ?? 0)
+  }));
+  const maxValue = rows.reduce((max, item) => Math.max(max, Math.abs(item.value)), 0);
+
+  return (
+    <section className="detail-panel breakdown-panel">
+      <div className="panel-heading">
+        <Icon size={18} aria-hidden="true" />
+        <span>{title}</span>
+      </div>
+
+      {loading ? (
+        <div className="empty-state compact-empty-state">
+          <RefreshCw size={18} aria-hidden="true" />
+          <span>A carregar vendas</span>
+        </div>
+      ) : null}
+
+      {!loading && !rows.length ? (
+        <div className="empty-state compact-empty-state">
+          <Table2 size={18} aria-hidden="true" />
+          <span>Sem dados para apresentar</span>
+        </div>
+      ) : null}
+
+      {!loading && rows.length ? (
+        <div className="breakdown-list">
+          {rows.map((item) => {
+            const isActive = String(activeValue ?? '') === String(item.code ?? '');
+            const width = maxValue > 0 ? Math.max((Math.abs(item.value) / maxValue) * 100, 4) : 0;
+
+            return (
+              <button
+                className={`breakdown-row ${isActive ? 'active' : ''}`}
+                key={`${filterKey}-${item.code}`}
+                type="button"
+                onClick={() => onSelectFilter(filterKey, isActive ? '' : item.code)}
+                aria-pressed={isActive}
+              >
+                <div className="breakdown-row-main">
+                  <strong>{item.label}</strong>
+                  <span>{formatRowCount(item.documents)} docs · {formatRowCount(item.lines)} linhas</span>
+                </div>
+                <em>{formatAmount(item.value)}</em>
+                <div className="breakdown-meter" aria-hidden="true">
+                  <span style={{ width: `${width}%` }} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function SalesPage({
   activePeriodLabel,
-  salesComparisonMonths,
+  filters,
+  salesTrend,
   salesDashboard,
-  salesDateRange,
+  period,
   onSelectPeriod,
+  onClearFilters,
+  onFilterChange
 }) {
   const summary = salesDashboard.data?.summary ?? null;
+  const breakdowns = salesDashboard.data?.breakdowns ?? {};
+  const filterOptions = salesDashboard.data?.filterOptions ?? {};
   const documentCount = Number(summary?.documentCount ?? 0);
+  const lineCount = Number(summary?.lineCount ?? 0);
   const netSales = Number(summary?.netSales ?? 0);
   const grossSales = Number(summary?.grossSales ?? 0);
   const vatTotal = Number(summary?.vatTotal ?? 0);
@@ -803,13 +1006,21 @@ function SalesPage({
         </div>
         <div className="sales-heading-actions">
           <SalesPeriodShortcuts
-            dateRange={salesDateRange}
             loading={salesDashboard.loading}
             onSelectPeriod={onSelectPeriod}
+            period={period}
           />
           <span className="pill">{activePeriodLabel}</span>
         </div>
       </div>
+
+      <VendasFilterBar
+        filterOptions={filterOptions}
+        filters={filters}
+        loading={salesDashboard.loading}
+        onClearFilters={onClearFilters}
+        onFilterChange={onFilterChange}
+      />
 
       {salesDashboard.error ? <div className="error-banner">{salesDashboard.error}</div> : null}
 
@@ -840,20 +1051,69 @@ function SalesPage({
           label="Documentos"
           value={salesDashboard.loading ? 'A carregar' : formatRowCount(documentCount)}
           tone="neutral"
-          detail={hasResult ? `Ticket médio ${formatAmount(averageDocumentValue)}` : 'Sem documentos disponíveis'}
+          detail={hasResult ? `${formatRowCount(lineCount)} linhas · ticket médio ${formatAmount(averageDocumentValue)}` : 'Sem documentos disponíveis'}
         />
       </div>
 
       <div className="sales-main-grid">
-        <MonthlySalesLineChart
-          items={salesComparisonMonths}
+        <VendasTrendChart
+          items={salesTrend}
           loading={salesDashboard.loading}
+          period={period}
         />
         <MonthlyGoalCard
           actualSales={summary?.netSales}
           hasResult={hasResult}
           loading={salesDashboard.loading}
           periodLabel={activePeriodLabel}
+        />
+      </div>
+
+      <div className="sales-breakdown-grid">
+        <SalesBreakdownPanel
+          activeValue={filters.familyCode}
+          filterKey="familyCode"
+          icon={Blocks}
+          items={breakdowns.families ?? []}
+          loading={salesDashboard.loading}
+          onSelectFilter={onFilterChange}
+          title="Vendas por família"
+        />
+        <SalesBreakdownPanel
+          activeValue={filters.productCode}
+          filterKey="productCode"
+          icon={Package}
+          items={breakdowns.products ?? []}
+          loading={salesDashboard.loading}
+          onSelectFilter={onFilterChange}
+          title="Vendas por produto"
+        />
+        <SalesBreakdownPanel
+          activeValue={filters.vendorCode}
+          filterKey="vendorCode"
+          icon={Users}
+          items={breakdowns.vendors ?? []}
+          loading={salesDashboard.loading}
+          onSelectFilter={onFilterChange}
+          title="Vendas por vendedor"
+        />
+        <SalesBreakdownPanel
+          activeValue={filters.brandCode}
+          filterKey="brandCode"
+          icon={Tags}
+          items={breakdowns.brands ?? []}
+          loading={salesDashboard.loading}
+          onSelectFilter={onFilterChange}
+          title="Vendas por marca"
+        />
+        <SalesBreakdownPanel
+          activeValue={filters.province}
+          filterKey="province"
+          icon={MapPin}
+          items={breakdowns.provinces ?? []}
+          loading={salesDashboard.loading}
+          onSelectFilter={onFilterChange}
+          title="Vendas por província"
         />
       </div>
     </section>
@@ -871,7 +1131,8 @@ export default function App() {
   const [generalSelectedVendor, setGeneralSelectedVendor] = useState(null);
   const [generalVendorDocuments, setGeneralVendorDocuments] = useState(createVendorDocumentsState);
   const [vendasSalesDashboard, setVendasSalesDashboard] = useState(createSalesDashboardState);
-  const [vendasSalesDateRange, setVendasSalesDateRange] = useState(defaultSalesDateRange);
+  const [vendasPeriod, setVendasPeriod] = useState('month');
+  const [vendasFilters, setVendasFilters] = useState(createVendasFilters);
   const [tableSearch, setTableSearch] = useState('');
   const [tablesState, setTablesState] = useState({ loading: false, tables: [], error: null });
   const [selectedTable, setSelectedTable] = useState(null);
@@ -906,13 +1167,14 @@ export default function App() {
   const generalRecentDocumentsTitle = generalSelectedVendor
     ? `Documentos recentes - ${generalSelectedVendor.name}`
     : 'Documentos de venda recentes';
-  const vendasActiveSalesDateRange = vendasSalesDashboard.data?.dateRange ?? vendasSalesDateRange;
+  const vendasActiveSalesDateRange = vendasSalesDashboard.data?.dateRange ?? null;
   const vendasActivePeriodLabel = useMemo(
-    () => formatDateRangeLabel(vendasActiveSalesDateRange),
-    [vendasActiveSalesDateRange]
+    () => vendasActiveSalesDateRange
+      ? formatDateRangeLabel(vendasActiveSalesDateRange)
+      : vendasPeriodLabels[vendasPeriod],
+    [vendasActiveSalesDateRange, vendasPeriod]
   );
-  const vendasSalesComparisonMonths =
-    vendasSalesDashboard.data?.comparisonMonths ?? vendasSalesDashboard.data?.byMonth ?? [];
+  const vendasSalesTrend = vendasSalesDashboard.data?.trend ?? [];
 
   const databaseDetail = useMemo(() => {
     if (database.data?.databaseName) return database.data.databaseName;
@@ -989,10 +1251,26 @@ export default function App() {
     setVendorDocuments: setGeneralVendorDocuments
   });
 
-  const loadVendasSalesDashboard = (filters = vendasSalesDateRange) => loadSalesDashboardData({
-    filters,
-    setDashboard: setVendasSalesDashboard
-  });
+  const loadVendasSalesDashboard = async (period = vendasPeriod, filters = vendasFilters) => {
+    setVendasSalesDashboard((current) => ({ ...current, loading: true, error: null }));
+
+    try {
+      const response = await getVendasDashboard({
+        period,
+        ...filters,
+        breakdownLimit: 10,
+        optionLimit: 300
+      });
+
+      setVendasSalesDashboard({
+        loading: false,
+        data: response.data,
+        error: null
+      });
+    } catch (error) {
+      setVendasSalesDashboard({ loading: false, data: null, error: error.message });
+    }
+  };
 
   const loadVendorDocumentsForView = async ({
     dateRange,
@@ -1092,9 +1370,26 @@ export default function App() {
     loadGeneralSalesDashboard(currentMonthRange);
   };
 
-  const applyVendasSalesDatePreset = (dateRange) => {
-    setVendasSalesDateRange(dateRange);
-    loadVendasSalesDashboard(dateRange);
+  const applyVendasSalesPeriod = (period) => {
+    setVendasPeriod(period);
+    loadVendasSalesDashboard(period, vendasFilters);
+  };
+
+  const updateVendasFilter = (filterKey, value) => {
+    const nextFilters = {
+      ...vendasFilters,
+      [filterKey]: value
+    };
+
+    setVendasFilters(nextFilters);
+    loadVendasSalesDashboard(vendasPeriod, nextFilters);
+  };
+
+  const clearVendasFilters = () => {
+    const nextFilters = createVendasFilters();
+
+    setVendasFilters(nextFilters);
+    loadVendasSalesDashboard(vendasPeriod, nextFilters);
   };
 
   const submitTableSearch = (event) => {
@@ -1355,10 +1650,13 @@ export default function App() {
         {activePage === 'sales' ? (
           <SalesPage
             activePeriodLabel={vendasActivePeriodLabel}
-            salesComparisonMonths={vendasSalesComparisonMonths}
+            filters={vendasFilters}
+            period={vendasPeriod}
             salesDashboard={vendasSalesDashboard}
-            salesDateRange={vendasSalesDateRange}
-            onSelectPeriod={applyVendasSalesDatePreset}
+            salesTrend={vendasSalesTrend}
+            onClearFilters={clearVendasFilters}
+            onFilterChange={updateVendasFilter}
+            onSelectPeriod={applyVendasSalesPeriod}
           />
         ) : null}
 

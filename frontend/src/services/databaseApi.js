@@ -26,6 +26,11 @@ export const getVendorDocuments = (params = {}) => {
   return apiClient.get(`/dashboard/sales/vendor-documents${query ? `?${query}` : ''}`);
 };
 
+export const getVendasDashboard = (params = {}) => {
+  const query = toQueryString(params);
+  return apiClient.get(`/vendas${query ? `?${query}` : ''}`);
+};
+
 export const getDatabaseTables = (params = {}) => {
   const query = toQueryString(params);
   return apiClient.get(`/database/tables${query ? `?${query}` : ''}`);

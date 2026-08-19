@@ -38,6 +38,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -340,6 +341,18 @@ nav button:hover:not(.active) {
   opacity: 0.68;
 }
 
+.sales-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(150px, 1fr)) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.sales-filter-bar .secondary-button {
+  min-width: 94px;
+  margin-top: 0;
+}
+
 .sales-kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -368,6 +381,153 @@ nav button:hover:not(.active) {
 .sales-page .chart-panel,
 .sales-page .recent-documents-panel {
   margin: 0;
+}
+
+.sales-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.sales-breakdown-grid .breakdown-panel:first-child {
+  grid-column: 1 / -1;
+}
+
+.vendas-trend-panel {
+  min-width: 0;
+}
+
+.vendas-trend-bars {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  min-height: 260px;
+  padding: 12px 0 2px;
+  overflow-x: auto;
+}
+
+.vendas-trend-item {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  gap: 7px;
+  flex: 0 0 58px;
+  height: 240px;
+}
+
+.vendas-trend-track {
+  display: flex;
+  align-items: end;
+  width: 34px;
+  height: 174px;
+  overflow: hidden;
+  background: var(--surface-strong);
+  border-radius: 999px;
+}
+
+.vendas-trend-track span {
+  display: block;
+  width: 100%;
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
+  border-radius: inherit;
+}
+
+.vendas-trend-item strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.vendas-trend-item em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.breakdown-list {
+  display: grid;
+  gap: 2px;
+}
+
+.breakdown-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 14px;
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.breakdown-row:last-child {
+  border-bottom: 0;
+}
+
+.breakdown-row:hover .breakdown-row-main strong,
+.breakdown-row.active .breakdown-row-main strong,
+.breakdown-row:hover em,
+.breakdown-row.active em {
+  color: var(--accent-strong);
+}
+
+.breakdown-row:focus-visible {
+  outline: 3px solid rgba(208, 0, 0, 0.18);
+  outline-offset: 2px;
+}
+
+.breakdown-row-main {
+  min-width: 0;
+}
+
+.breakdown-row-main strong,
+.breakdown-row-main span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.breakdown-row-main strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.breakdown-row-main span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.breakdown-row em {
+  color: var(--text);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.breakdown-meter {
+  grid-column: 1 / -1;
+  height: 6px;
+  overflow: hidden;
+  background: var(--surface-strong);
+  border-radius: 999px;
+}
+
+.breakdown-meter span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
 }
 
 .monthly-chart-panel {
@@ -689,7 +849,8 @@ label {
 }
 
 textarea,
-input {
+input,
+select {
   width: 100%;
   color: var(--text);
   background: #fbfcfd;
@@ -705,15 +866,22 @@ textarea {
   line-height: 1.5;
 }
 
-input {
+input,
+select {
   min-height: 44px;
   padding: 10px 12px;
 }
 
 textarea:focus,
-input:focus {
+input:focus,
+select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(208, 0, 0, 0.14);
+}
+
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
 }
 
 .form-grid {
@@ -1243,8 +1411,14 @@ td {
 
   .dashboard-details,
   .sales-main-grid,
-  .sales-analysis-grid {
+  .sales-analysis-grid,
+  .sales-filter-bar,
+  .sales-breakdown-grid {
     grid-template-columns: 1fr;
+  }
+
+  .sales-breakdown-grid .breakdown-panel:first-child {
+    grid-column: auto;
   }
 
   .pie-layout {
@@ -1291,6 +1465,8 @@ td {
   .module-grid,
   .form-grid,
   .date-filter,
+  .sales-filter-bar,
+  .sales-breakdown-grid,
   .browser-layout {
     grid-template-columns: 1fr;
   }

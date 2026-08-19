@@ -3,6 +3,8 @@
   Banknote,
   Blocks,
   CalendarDays,
+  Check,
+  ChevronDown,
   Columns3,
   Database,
   Eye,
@@ -55,6 +57,8 @@ const defaultVendasFilters = {
 const createSalesDashboardState = () => ({ loading: false, data: null, error: null });
 const createVendorDocumentsState = () => ({ loading: false, rows: [], error: null });
 const createVendasFilters = () => ({ ...defaultVendasFilters });
+const emptyFilterOptions = [];
+const maxVisibleFilterOptions = 80;
 const vendasPeriodLabels = {
   day: 'Hoje',
   month: 'Mês',
@@ -794,33 +798,257 @@ function formatFilterOptionLabel(option) {
   return `${option.label} (${option.value})`;
 }
 
+function getSelectedFilterDisplay(options = [], selectedValue) {
+  if (!selectedValue) {
+    return '';
+  }
+
+  const selectedOption = options.find((option) => String(option.value) === String(selectedValue));
+
+  return selectedOption ? formatFilterOptionLabel(selectedOption) : selectedValue;
+}
+
+function getFilterOptionParts(option) {
+  const value = String(option?.value ?? '');
+  const label = String(option?.label ?? '').trim();
+
+  if (!label || label === value) {
+    return { label: value, detail: '' };
+  }
+
+  return { label, detail: value };
+}
+
+function filterOptionsBySearch(options = [], searchValue) {
+  const normalizedSearch = String(searchValue ?? '').trim().toLowerCase();
+
+  if (!normalizedSearch) {
+    return options;
+  }
+
+  return options.filter((option) => {
+    const value = String(option.value ?? '').toLowerCase();
+    const label = String(option.label ?? '').toLowerCase();
+    const displayLabel = formatFilterOptionLabel(option).toLowerCase();
+
+    return value.includes(normalizedSearch) || label.includes(normalizedSearch) || displayLabel.includes(normalizedSearch);
+  });
+}
+
+function SearchableFilterDropdown({
+  filterKey,
+  id,
+  loading,
+  options,
+  placeholder,
+  selectedValue,
+  onFilterChange
+}) {
+  const availableOptions = useMemo(
+    () => getFilterOptionsWithSelection(options, selectedValue),
+    [options, selectedValue]
+  );
+  const selectedDisplay = useMemo(
+    () => getSelectedFilterDisplay(availableOptions, selectedValue),
+    [availableOptions, selectedValue]
+  );
+  const [draftValue, setDraftValue] = useState(() => selectedDisplay);
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const searchValue = draftValue === selectedDisplay ? '' : draftValue;
+  const visibleOptions = useMemo(
+    () => filterOptionsBySearch(availableOptions, searchValue).slice(0, maxVisibleFilterOptions),
+    [availableOptions, searchValue]
+  );
+  const selectedValueString = String(selectedValue ?? '');
+  const activeOptionId = visibleOptions[activeIndex] ? `${id}-option-${activeIndex}` : undefined;
+
+  useEffect(() => {
+    setDraftValue(selectedDisplay);
+  }, [selectedDisplay]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [searchValue, visibleOptions.length]);
+
+  const selectOption = (option) => {
+    const optionValue = String(option?.value ?? '');
+
+    setDraftValue(formatFilterOptionLabel(option));
+    setIsOpen(false);
+    setActiveIndex(0);
+
+    if (optionValue !== selectedValueString) {
+      onFilterChange(filterKey, option?.value ?? '');
+    }
+  };
+
+  const clearFilter = () => {
+    setDraftValue('');
+    setIsOpen(false);
+    setActiveIndex(0);
+
+    if (selectedValue) {
+      onFilterChange(filterKey, '');
+    }
+  };
+
+  return (
+    <div
+      className={`searchable-filter${isOpen ? ' open' : ''}`}
+      onBlur={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget)) {
+          return;
+        }
+
+        if (!draftValue.trim()) {
+          clearFilter();
+          return;
+        }
+
+        setIsOpen(false);
+        setDraftValue(selectedDisplay);
+      }}
+    >
+      <div className="searchable-filter-field">
+        <Search className="filter-search-icon" size={15} aria-hidden="true" />
+        <input
+          aria-activedescendant={isOpen ? activeOptionId : undefined}
+          aria-autocomplete="list"
+          aria-controls={`${id}-menu`}
+          aria-expanded={isOpen}
+          aria-label={placeholder}
+          autoComplete="off"
+          disabled={loading}
+          placeholder={placeholder}
+          role="combobox"
+          value={draftValue}
+          onChange={(event) => {
+            setDraftValue(event.target.value);
+            setIsOpen(true);
+          }}
+          onClick={() => setIsOpen(true)}
+          onFocus={(event) => {
+            setIsOpen(true);
+            event.target.select();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+
+              if (!draftValue.trim()) {
+                clearFilter();
+                return;
+              }
+
+              if (visibleOptions[activeIndex] ?? visibleOptions[0]) {
+                selectOption(visibleOptions[activeIndex] ?? visibleOptions[0]);
+              }
+            }
+
+            if (event.key === 'Escape') {
+              setIsOpen(false);
+              setDraftValue(selectedDisplay);
+              setActiveIndex(0);
+            }
+
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              setIsOpen(true);
+              setActiveIndex((current) => {
+                if (!isOpen || visibleOptions.length === 0) {
+                  return 0;
+                }
+
+                return Math.min(current + 1, visibleOptions.length - 1);
+              });
+            }
+
+            if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              setIsOpen(true);
+              setActiveIndex((current) => {
+                if (!isOpen || visibleOptions.length === 0) {
+                  return 0;
+                }
+
+                return Math.max(current - 1, 0);
+              });
+            }
+          }}
+        />
+        <button
+          aria-controls={`${id}-menu`}
+          aria-expanded={isOpen}
+          aria-label={`Abrir ${placeholder}`}
+          className="searchable-filter-toggle"
+          disabled={loading}
+          type="button"
+          onClick={() => setIsOpen((current) => !current)}
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          <ChevronDown size={15} aria-hidden="true" />
+        </button>
+      </div>
+
+      {isOpen && (
+        <div className="searchable-filter-menu" id={`${id}-menu`} role="listbox">
+          {visibleOptions.length > 0 ? (
+            visibleOptions.map((option, index) => {
+              const active = String(option.value ?? '') === selectedValueString;
+              const highlighted = index === activeIndex;
+              const optionParts = getFilterOptionParts(option);
+
+              return (
+                <button
+                  aria-selected={active}
+                  className={`searchable-filter-option${active ? ' active' : ''}${highlighted ? ' highlighted' : ''}`}
+                  id={`${id}-option-${index}`}
+                  key={`${id}-${option.value}`}
+                  role="option"
+                  type="button"
+                  onClick={() => selectOption(option)}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  onMouseDown={(event) => event.preventDefault()}
+                >
+                  <strong>{optionParts.label}</strong>
+                  {optionParts.detail ? <span>{optionParts.detail}</span> : null}
+                  {active ? <Check size={15} aria-hidden="true" /> : null}
+                </button>
+              );
+            })
+          ) : (
+            <div className="searchable-filter-empty">Sem resultados</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function VendasFilterBar({ filterOptions, filters, loading, onClearFilters, onFilterChange }) {
   const filterConfigs = [
-    { key: 'familyCode', placeholder: 'Todas as famílias', options: filterOptions?.families ?? [] },
-    { key: 'productCode', placeholder: 'Todos os produtos', options: filterOptions?.products ?? [] },
-    { key: 'vendorCode', placeholder: 'Todos os vendedores', options: filterOptions?.vendors ?? [] },
-    { key: 'brandCode', placeholder: 'Todas as marcas', options: filterOptions?.brands ?? [] },
-    { key: 'province', placeholder: 'Todas as províncias', options: filterOptions?.provinces ?? [] }
+    { key: 'familyCode', id: 'vendas-family-filter', placeholder: 'Pesquisar família', options: filterOptions?.families ?? emptyFilterOptions },
+    { key: 'productCode', id: 'vendas-product-filter', placeholder: 'Pesquisar produto', options: filterOptions?.products ?? emptyFilterOptions },
+    { key: 'vendorCode', id: 'vendas-vendor-filter', placeholder: 'Pesquisar vendedor', options: filterOptions?.vendors ?? emptyFilterOptions },
+    { key: 'brandCode', id: 'vendas-brand-filter', placeholder: 'Pesquisar marca', options: filterOptions?.brands ?? emptyFilterOptions },
+    { key: 'province', id: 'vendas-province-filter', placeholder: 'Pesquisar província', options: filterOptions?.provinces ?? emptyFilterOptions }
   ];
   const hasFilters = hasActiveVendasFilters(filters);
 
   return (
     <div className="sales-filter-bar" aria-label="Filtros de vendas">
       {filterConfigs.map((config) => (
-        <select
-          aria-label={config.placeholder}
+        <SearchableFilterDropdown
+          filterKey={config.key}
+          id={config.id}
           key={config.key}
-          value={filters[config.key] ?? ''}
-          onChange={(event) => onFilterChange(config.key, event.target.value)}
-          disabled={loading}
-        >
-          <option value="">{config.placeholder}</option>
-          {getFilterOptionsWithSelection(config.options, filters[config.key]).map((option) => (
-            <option key={`${config.key}-${option.value}`} value={option.value}>
-              {formatFilterOptionLabel(option)}
-            </option>
-          ))}
-        </select>
+          loading={loading}
+          options={config.options}
+          placeholder={config.placeholder}
+          selectedValue={filters[config.key] ?? ''}
+          onFilterChange={onFilterChange}
+        />
       ))}
       <button
         className="secondary-button compact"

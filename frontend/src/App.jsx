@@ -1,10 +1,12 @@
 ﻿import {
   Activity,
+  AlertTriangle,
   Banknote,
   Blocks,
   CalendarDays,
   Check,
   ChevronDown,
+  Clock,
   Columns3,
   Database,
   Eye,
@@ -19,6 +21,7 @@
   Search,
   Server,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   ShoppingCart,
   Table2,
@@ -26,12 +29,14 @@
   Target,
   Tags,
   TrendingUp,
+  UserCheck,
   Users,
   X
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   executeSelectQuery,
+  getClientesDashboard,
   getDatabaseTableColumns,
   getDatabaseTableRows,
   getDatabaseTables,
@@ -56,6 +61,7 @@ const defaultVendasFilters = {
 };
 const createSalesDashboardState = () => ({ loading: false, data: null, error: null });
 const createVendorDocumentsState = () => ({ loading: false, rows: [], error: null });
+const createClientesDashboardState = () => ({ loading: false, data: null, error: null });
 const createVendasFilters = () => ({ ...defaultVendasFilters });
 const emptyFilterOptions = [];
 const maxVisibleFilterOptions = 80;
@@ -64,6 +70,52 @@ const vendasPeriodLabels = {
   month: 'Mês',
   year: 'Ano'
 };
+const clientesSegmentCards = [
+  {
+    key: 'total',
+    countKey: 'totalClients',
+    label: 'Total clientes',
+    icon: Users,
+    tone: 'neutral',
+    detail: 'Todos os clientes registados'
+  },
+  {
+    key: 'active',
+    countKey: 'activeClients',
+    label: 'Ativos',
+    icon: UserCheck,
+    tone: 'success',
+    detail: 'Compraram nos últimos 30 dias'
+  },
+  {
+    key: 'attention',
+    countKey: 'attentionClients',
+    label: 'Atenção',
+    icon: Clock,
+    tone: 'neutral',
+    detail: 'Última compra entre 31 e 60 dias'
+  },
+  {
+    key: 'risk',
+    countKey: 'riskClients',
+    label: 'Risco 60-90',
+    icon: AlertTriangle,
+    tone: 'danger',
+    detail: 'Última compra entre 61 e 90 dias'
+  },
+  {
+    key: 'highRisk',
+    countKey: 'highRiskClients',
+    label: 'Risco +90',
+    icon: ShieldAlert,
+    tone: 'danger',
+    detail: 'Mais de 90 dias ou sem compra'
+  }
+];
+const clientesSegmentLabels = clientesSegmentCards.reduce((labels, segment) => ({
+  ...labels,
+  [segment.key]: segment.label
+}), {});
 const salesDocumentColumns = [
   'documentDate',
   'documentType',
@@ -1348,6 +1400,144 @@ function SalesPage({
   );
 }
 
+function ClientesStatusCard({ active, count, segment, loading, onSelectSegment }) {
+  const Icon = segment.icon;
+
+  return (
+    <button
+      className={`customer-status-card ${active ? 'active' : ''}`}
+      type="button"
+      onClick={() => onSelectSegment(segment.key)}
+      disabled={loading}
+      aria-pressed={active}
+    >
+      <div className={`status-icon ${segment.tone}`}>
+        <Icon size={20} aria-hidden="true" />
+      </div>
+      <div>
+        <p className="eyebrow">{segment.label}</p>
+        <h2>{loading ? 'A carregar' : formatRowCount(count)}</h2>
+        <p className="muted">{segment.detail}</p>
+      </div>
+    </button>
+  );
+}
+
+function formatDaysSinceLastPurchase(value) {
+  if (value === null || value === undefined) {
+    return 'Sem compras';
+  }
+
+  const days = Number(value);
+
+  if (Number.isNaN(days)) {
+    return 'Sem compras';
+  }
+
+  if (days <= 0) {
+    return 'Hoje';
+  }
+
+  return `${formatRowCount(days)} dias`;
+}
+
+function ClientesTable({ loading, rows }) {
+  if (loading) {
+    return (
+      <div className="empty-state compact-empty-state">
+        <RefreshCw size={18} aria-hidden="true" />
+        <span>A carregar clientes</span>
+      </div>
+    );
+  }
+
+  if (!rows.length) {
+    return (
+      <div className="empty-state compact-empty-state">
+        <Table2 size={18} aria-hidden="true" />
+        <span>Sem clientes para apresentar</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="table-shell">
+      <table>
+        <thead>
+          <tr>
+            <th>Cliente</th>
+            <th>Nome</th>
+            <th>Província</th>
+            <th>Vendedor</th>
+            <th>Última compra</th>
+            <th>Dias</th>
+            <th>Docs</th>
+            <th>Total vendas</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={`${row.customerCode}-${row.segment}`}>
+              <td>{row.customerCode}</td>
+              <td>{row.customerName}</td>
+              <td>{row.provinceName}</td>
+              <td>{row.vendorName}</td>
+              <td>{row.lastPurchaseDate ? formatCellValue(row.lastPurchaseDate) : 'Sem compras'}</td>
+              <td>{formatDaysSinceLastPurchase(row.daysSinceLastPurchase)}</td>
+              <td>{formatRowCount(row.purchaseDocumentCount)}</td>
+              <td>{formatAmount(row.grossSales)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ClientesPage({ clientesDashboard, selectedSegment, onSelectSegment }) {
+  const summary = clientesDashboard.data?.summary ?? {};
+  const rows = clientesDashboard.data?.rows ?? [];
+  const selectedSegmentLabel = clientesSegmentLabels[selectedSegment] ?? 'Clientes';
+
+  return (
+    <section className="customers-page">
+      <div className="section-heading customers-page-heading">
+        <div>
+          <p className="eyebrow">Clientes</p>
+          <h2>Gestão de clientes</h2>
+        </div>
+        <span className="pill">{selectedSegmentLabel}</span>
+      </div>
+
+      {clientesDashboard.error ? <div className="error-banner">{clientesDashboard.error}</div> : null}
+
+      <div className="customer-status-grid">
+        {clientesSegmentCards.map((segment) => (
+          <ClientesStatusCard
+            active={selectedSegment === segment.key}
+            count={summary[segment.countKey] ?? 0}
+            key={segment.key}
+            loading={clientesDashboard.loading}
+            segment={segment}
+            onSelectSegment={onSelectSegment}
+          />
+        ))}
+      </div>
+
+      <section className="customers-table-panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Lista</p>
+            <h2>{selectedSegmentLabel}</h2>
+          </div>
+          <span className="pill">{clientesDashboard.loading ? 'A carregar' : `${formatRowCount(rows.length)} linhas`}</span>
+        </div>
+        <ClientesTable loading={clientesDashboard.loading} rows={rows} />
+      </section>
+    </section>
+  );
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1361,6 +1551,8 @@ export default function App() {
   const [vendasSalesDashboard, setVendasSalesDashboard] = useState(createSalesDashboardState);
   const [vendasPeriod, setVendasPeriod] = useState('month');
   const [vendasFilters, setVendasFilters] = useState(createVendasFilters);
+  const [clientesDashboard, setClientesDashboard] = useState(createClientesDashboardState);
+  const [clientesSegment, setClientesSegment] = useState('total');
   const [tableSearch, setTableSearch] = useState('');
   const [tablesState, setTablesState] = useState({ loading: false, tables: [], error: null });
   const [selectedTable, setSelectedTable] = useState(null);
@@ -1500,6 +1692,25 @@ export default function App() {
     }
   };
 
+  const loadClientesDashboard = async (segment = clientesSegment) => {
+    setClientesDashboard((current) => ({ ...current, loading: true, error: null }));
+
+    try {
+      const response = await getClientesDashboard({
+        segment,
+        limit: 200
+      });
+
+      setClientesDashboard({
+        loading: false,
+        data: response.data,
+        error: null
+      });
+    } catch (error) {
+      setClientesDashboard({ loading: false, data: null, error: error.message });
+    }
+  };
+
   const loadVendorDocumentsForView = async ({
     dateRange,
     setSelectedVendor,
@@ -1620,6 +1831,11 @@ export default function App() {
     loadVendasSalesDashboard(vendasPeriod, nextFilters);
   };
 
+  const selectClientesSegment = (segment) => {
+    setClientesSegment(segment);
+    loadClientesDashboard(segment);
+  };
+
   const submitTableSearch = (event) => {
     event.preventDefault();
     loadTables(tableSearch);
@@ -1669,6 +1885,17 @@ export default function App() {
       !vendasSalesDashboard.error
     ) {
       loadVendasSalesDashboard();
+    }
+  }, [activePage]);
+
+  useEffect(() => {
+    if (
+      activePage === 'customers' &&
+      !clientesDashboard.loading &&
+      !clientesDashboard.data &&
+      !clientesDashboard.error
+    ) {
+      loadClientesDashboard();
     }
   }, [activePage]);
 
@@ -1755,6 +1982,11 @@ export default function App() {
               refreshStatus();
               if (activePage === 'sales') {
                 loadVendasSalesDashboard();
+                return;
+              }
+
+              if (activePage === 'customers') {
+                loadClientesDashboard();
                 return;
               }
 
@@ -1888,7 +2120,15 @@ export default function App() {
           />
         ) : null}
 
-        {['customers', 'products'].includes(activePage) ? (
+        {activePage === 'customers' ? (
+          <ClientesPage
+            clientesDashboard={clientesDashboard}
+            selectedSegment={clientesSegment}
+            onSelectSegment={selectClientesSegment}
+          />
+        ) : null}
+
+        {activePage === 'products' ? (
           <section className="empty-state page-empty-state">
             <ActivePageIcon size={22} aria-hidden="true" />
             <span>Sem dados configurados para apresentar nesta área</span>

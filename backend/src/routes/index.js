@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import clientesRoutes from './clientes.routes.js';
 import dashboardRoutes from './dashboard.routes.js';
 import databaseRoutes from './database.routes.js';
 import healthRoutes from './health.routes.js';
@@ -19,6 +20,7 @@ router.get('/', (_req, res) => {
         databaseTables: '/api/database/tables',
         databaseColumns: '/api/database/columns',
         databaseRows: '/api/database/rows',
+        clientes: '/api/clientes',
         salesDashboard: '/api/dashboard/sales',
         salesVendorDocuments: '/api/dashboard/sales/vendor-documents',
         vendas: '/api/vendas',
@@ -30,6 +32,7 @@ router.get('/', (_req, res) => {
 });
 
 router.use('/health', healthRoutes);
+router.use('/clientes', clientesRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/database', databaseRoutes);
 router.use('/primavera', primaveraRoutes);

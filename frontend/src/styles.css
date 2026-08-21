@@ -192,6 +192,7 @@ nav button:hover:not(.active) {
 
 .topbar h1,
 .section-heading h2,
+.customer-status-card h2,
 .status-card h2,
 .module-tile h3 {
   margin: 0;
@@ -295,6 +296,65 @@ nav button:hover:not(.active) {
 
 .sales-dashboard {
   margin-bottom: 24px;
+}
+
+.customers-page {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.customers-page-heading {
+  margin-bottom: 0;
+}
+
+.customer-status-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.customer-status-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+  min-height: 132px;
+  padding: 18px;
+  color: var(--text);
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.customer-status-card:hover,
+.customer-status-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(208, 0, 0, 0.12), var(--shadow);
+}
+
+.customer-status-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.customer-status-card h2 {
+  font-size: 22px;
+}
+
+.customers-table-panel {
+  min-width: 0;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.customers-table-panel .section-heading {
+  margin-bottom: 14px;
 }
 
 .sales-page {
@@ -1540,6 +1600,7 @@ td {
   }
 
   .status-grid,
+  .customer-status-grid,
   .metric-grid,
   .sales-kpi-grid,
   .module-grid,
@@ -1598,6 +1659,7 @@ td {
   }
 
   .status-grid,
+  .customer-status-grid,
   .metric-grid,
   .sales-kpi-grid,
   .module-grid,

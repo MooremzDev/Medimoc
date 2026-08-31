@@ -717,12 +717,15 @@ function formatCompactAmount(value) {
   }).format(value ?? 0);
 }
 
-function MonthlySalesLineChart({ items, loading }) {
+function MonthlySalesLineChart({ activeMonth, goal = monthlySalesGoal, items, loading }) {
   const monthlySales = (items ?? []).map((item) => ({
     month: item.month,
     documents: Number(item.documentCount ?? 0),
     value: Number(item.netSales ?? 0)
   }));
+  const activeMonthSales = monthlySales.find((item) => item.month === activeMonth) ?? monthlySales.at(-1) ?? null;
+  const activeMonthValue = Number(activeMonthSales?.value ?? 0);
+  const goalGap = activeMonthValue - goal;
 
   if (loading) {
     return (
@@ -759,9 +762,11 @@ function MonthlySalesLineChart({ items, loading }) {
   const padding = { top: 28, right: 30, bottom: 50, left: 76 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
-  const values = monthlySales.map((item) => item.value);
-  const maxValue = Math.max(...values, 0);
-  const minValue = Math.min(...values, 0);
+  const values = [...monthlySales.map((item) => item.value), goal];
+  const rawMaxValue = Math.max(...values, 0);
+  const rawMinValue = Math.min(...values, 0);
+  const maxValue = rawMaxValue > 0 ? rawMaxValue * 1.08 : 1;
+  const minValue = rawMinValue < 0 ? rawMinValue * 1.08 : 0;
   const valueRange = Math.max(maxValue - minValue, 1);
   const yForValue = (value) => padding.top + ((maxValue - value) / valueRange) * chartHeight;
   const xForIndex = (index) => (
@@ -777,6 +782,7 @@ function MonthlySalesLineChart({ items, loading }) {
   const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
   const baseline = yForValue(0);
   const areaPath = `${linePath} L ${points.at(-1).x} ${baseline} L ${points[0].x} ${baseline} Z`;
+  const goalY = yForValue(goal);
   const gridValues = Array.from({ length: 4 }, (_value, index) => (
     maxValue - (valueRange * index) / 3
   ));
@@ -788,10 +794,23 @@ function MonthlySalesLineChart({ items, loading }) {
           <TrendingUp size={18} aria-hidden="true" />
           <span>Vendas efetuadas por mês</span>
         </div>
+        <div className="monthly-chart-metrics" aria-label="Comparação com a meta mensal">
+          <span>
+            <i className="chart-legend-dot actual" aria-hidden="true" />
+            Vendas do mês: <strong>{formatAmount(activeMonthValue)}</strong>
+          </span>
+          <span>
+            <i className="chart-legend-dot target" aria-hidden="true" />
+            Meta: <strong>{formatAmount(goal)}</strong>
+          </span>
+          <span className={goalGap >= 0 ? 'positive' : 'negative'}>
+            {goalGap >= 0 ? 'Acima' : 'Falta'}: <strong>{formatAmount(Math.abs(goalGap))}</strong>
+          </span>
+        </div>
       </div>
 
       <div className="line-chart-shell">
-        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Evolução mensal das vendas efetuadas">
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Comparação mensal entre vendas efetuadas e meta mensal">
           <defs>
             <linearGradient id="monthly-sales-area" x1="0" x2="0" y1="0" y2="1">
               <stop offset="0%" stopColor="#d00000" stopOpacity="0.24" />
@@ -813,12 +832,25 @@ function MonthlySalesLineChart({ items, loading }) {
           })}
 
           <path className="line-chart-area" d={areaPath} />
+          <line
+            className="line-chart-goal"
+            x1={padding.left}
+            x2={width - padding.right}
+            y1={goalY}
+            y2={goalY}
+          />
+          <text className="line-chart-goal-label" x={width - padding.right - 8} y={Math.max(goalY - 10, padding.top + 12)} textAnchor="end">
+            Meta {formatCompactAmount(goal)}
+          </text>
           <path className="line-chart-line" d={linePath} />
 
           {points.map((point) => (
             <g className="line-chart-point" key={point.month}>
-              <title>{`${formatMonthLabel(point.month)}: ${formatAmount(point.value)} (${point.documents} documentos)`}</title>
+              <title>{`${formatMonthLabel(point.month)}: ${formatAmount(point.value)} de ${formatAmount(goal)} (${point.documents} documentos)`}</title>
               <circle cx={point.x} cy={point.y} r="5" />
+              <text className="line-chart-point-value" x={point.x} y={Math.max(point.y - 13, padding.top + 14)} textAnchor="middle">
+                {formatCompactAmount(point.value)}
+              </text>
               <text className="line-chart-month" x={point.x} y={height - 20} textAnchor="middle">
                 {formatMonthLabel(point.month)}
               </text>
@@ -2052,6 +2084,7 @@ export default function App() {
             </div>
 
             <MonthlySalesLineChart
+              activeMonth={getMonthKey(getSelectedMonthFromRange(generalActiveSalesDateRange))}
               items={generalSalesComparisonMonths}
               loading={generalSalesDashboard.loading}
             />
@@ -2073,7 +2106,7 @@ export default function App() {
                   <span>Vendas por vendedor</span>
                 </div>
                 <p className="panel-note">
-                  Totais calculados apenas com documentos FA e VD, usando o responsável de cobrança do documento.
+                  Totais calculados com documentos FA, VD, FAMR, VDMR, FA-MR, VD-MR, VD-NP e NC, usando o responsável de cobrança do documento.
                 </p>
                 <VendorBarChart
                   items={generalSalesDashboard.data?.byVendor ?? []}

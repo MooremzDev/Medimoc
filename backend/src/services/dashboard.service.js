@@ -5,7 +5,7 @@ import { databaseService } from './database.service.js';
 const quoteIdentifier = (identifier) => `[${identifier.replace(/]/g, ']]')}]`;
 const cabecDocTable = `${quoteIdentifier(env.primaveraSchema)}.${quoteIdentifier('CabecDoc')}`;
 const vendedoresTable = `${quoteIdentifier(env.primaveraSchema)}.${quoteIdentifier('Vendedores')}`;
-const vendorDocumentTypes = ['FA', 'VD'];
+const vendorDocumentTypes = env.salesDocumentTypes;
 
 const addDocumentTypeInputs = (request) => {
   env.salesDocumentTypes.forEach((documentType, index) => {

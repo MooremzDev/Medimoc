@@ -748,6 +748,57 @@ nav button:hover:not(.active) {
   gap: 16px;
 }
 
+.monthly-chart-metrics {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: min(100%, 460px);
+}
+
+.monthly-chart-metrics span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 5px 9px;
+  color: var(--text);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.monthly-chart-metrics strong {
+  color: var(--accent-strong);
+  font-weight: 900;
+}
+
+.monthly-chart-metrics .positive strong {
+  color: var(--success);
+}
+
+.monthly-chart-metrics .negative strong {
+  color: var(--danger);
+}
+
+.chart-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+
+.chart-legend-dot.actual {
+  background: var(--accent);
+}
+
+.chart-legend-dot.target {
+  background: #6c6670;
+}
+
 .monthly-chart-heading p {
   max-width: 330px;
   margin: 0;
@@ -792,6 +843,24 @@ nav button:hover:not(.active) {
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.line-chart-goal {
+  stroke: #6c6670;
+  stroke-width: 2;
+  stroke-dasharray: 8 7;
+}
+
+.line-chart-goal-label,
+.line-chart-point-value {
+  fill: var(--accent-strong);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.line-chart-goal-label {
+  fill: #5d5660;
 }
 
 .line-chart-point circle {
@@ -1722,6 +1791,19 @@ td {
   .sales-heading-actions,
   .period-toggle {
     width: 100%;
+  }
+
+  .monthly-chart-heading,
+  .monthly-chart-metrics {
+    width: 100%;
+  }
+
+  .monthly-chart-heading {
+    flex-direction: column;
+  }
+
+  .monthly-chart-metrics {
+    justify-content: flex-start;
   }
 
   .table-search {

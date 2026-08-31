@@ -49,7 +49,7 @@ export const env = {
   jsonBodyLimit: process.env.JSON_BODY_LIMIT ?? '1mb',
   maxSelectRows: parseNumber('MAX_SELECT_ROWS', 1000),
   primaveraSchema: process.env.PRIMAVERA_SCHEMA ?? 'dbo',
-  salesDocumentTypes: parseList('SALES_DOCUMENT_TYPES', ['FA', 'VD', 'NC']),
+  salesDocumentTypes: parseList('SALES_DOCUMENT_TYPES', ['FA', 'VD', 'FAMR', 'VDMR', 'FA-MR', 'VD-MR', 'VD-NP', 'NC']),
   db: {
     server: process.env.DB_SERVER,
     instance: process.env.DB_INSTANCE,

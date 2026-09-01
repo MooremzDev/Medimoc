@@ -130,6 +130,115 @@ const buildOptionSelect = (codeColumn, labelColumn) => `
   ORDER BY label
 `;
 
+const rankingDimensions = {
+  vendors: {
+    codeColumn: 'vendorCode',
+    labelColumn: 'vendorName'
+  },
+  products: {
+    codeColumn: 'productCode',
+    labelColumn: 'productName'
+  },
+  brands: {
+    codeColumn: 'brandCode',
+    labelColumn: 'brandName'
+  }
+};
+
+const buildVendasBaseTempTableQuery = (documentTypeWhere) => `
+  IF OBJECT_ID('tempdb..#vendasBase') IS NOT NULL
+    DROP TABLE #vendasBase;
+
+  SELECT
+    C.Id AS documentId,
+    C.Data AS documentDate,
+    C.TipoDoc AS documentType,
+    C.NumDoc AS documentNumber,
+    C.Entidade AS customerCode,
+    COALESCE(NULLIF(Cl.Nome, ''), C.Entidade, 'Sem cliente') AS customerName,
+    COALESCE(NULLIF(Cl.Distrito, ''), 'SEM_PROVINCIA') AS provinceCode,
+    COALESCE(NULLIF(Cl.Distrito, ''), 'Sem provincia') AS provinceName,
+    A.Artigo AS productCode,
+    COALESCE(NULLIF(A.Descricao, ''), A.Artigo, 'Sem artigo') AS productName,
+    F.Familia AS familyCode,
+    COALESCE(NULLIF(F.Descricao, ''), F.Familia, 'Sem familia') AS familyName,
+    COALESCE(NULLIF(A.Marca, ''), 'SEM_MARCA') AS brandCode,
+    COALESCE(NULLIF(M.Descricao, ''), NULLIF(A.Marca, ''), 'Sem marca') AS brandName,
+    COALESCE(NULLIF(vendorSource.vendorCode, ''), 'SEM_VENDEDOR') AS vendorCode,
+    COALESCE(NULLIF(V.Nome, ''), NULLIF(vendorSource.vendorCode, ''), 'Sem vendedor') AS vendorName,
+    COALESCE(L.Quantidade, 0) AS quantity,
+    COALESCE(L.TotalIliquido, L.PrecoLiquido, 0) AS netSales,
+    COALESCE(L.TotalIva, 0) AS vatTotal,
+    COALESCE(L.TotalIliquido, L.PrecoLiquido, 0) + COALESCE(L.TotalIva, 0) AS grossSales
+  INTO #vendasBase
+  FROM ${tables.cabecDoc} C
+  INNER JOIN ${tables.clientes} Cl ON C.Entidade = Cl.Cliente
+  INNER JOIN ${tables.linhasDoc} L ON C.Id = L.IdCabecDoc
+  INNER JOIN ${tables.artigos} A ON L.Artigo = A.Artigo
+  INNER JOIN ${tables.familias} F ON F.Familia = A.Familia
+  OUTER APPLY (
+    SELECT COALESCE(NULLIF(L.Vendedor, ''), NULLIF(C.RespCobranca, ''), NULLIF(Cl.Vendedor, '')) AS vendorCode
+  ) vendorSource
+  LEFT JOIN ${tables.vendedores} V ON V.Vendedor = vendorSource.vendorCode
+  LEFT JOIN ${tables.marcas} M ON M.Marca = A.Marca
+  WHERE C.Data >= @startDate
+    AND C.Data < DATEADD(day, 1, @endDate)
+    ${documentTypeWhere}
+    AND (@familyCode IS NULL OR A.Familia = @familyCode)
+    AND (@productCode IS NULL OR A.Artigo = @productCode)
+    AND (@vendorCode IS NULL OR COALESCE(NULLIF(vendorSource.vendorCode, ''), 'SEM_VENDEDOR') = @vendorCode)
+    AND (@brandCode IS NULL OR COALESCE(NULLIF(A.Marca, ''), 'SEM_MARCA') = @brandCode)
+    AND (@province IS NULL OR COALESCE(NULLIF(Cl.Distrito, ''), 'SEM_PROVINCIA') = @province);
+`;
+
+const buildRankingSelect = ({ codeColumn, labelColumn }) => `
+  WITH rankingRows AS (
+    SELECT
+      ${codeColumn} AS code,
+      ${labelColumn} AS label,
+      ${metricSelect}
+    FROM #vendasBase
+    GROUP BY ${codeColumn}, ${labelColumn}
+  )
+  SELECT COUNT(*) AS totalRows
+  FROM rankingRows;
+
+  WITH rankingRows AS (
+    SELECT
+      ${codeColumn} AS code,
+      ${labelColumn} AS label,
+      ${metricSelect}
+    FROM #vendasBase
+    GROUP BY ${codeColumn}, ${labelColumn}
+  ),
+  rankedRows AS (
+    SELECT
+      ROW_NUMBER() OVER (ORDER BY grossSales DESC, label ASC) AS rank,
+      code,
+      label,
+      documentCount,
+      lineCount,
+      quantity,
+      netSales,
+      vatTotal,
+      grossSales
+    FROM rankingRows
+  )
+  SELECT
+    rank,
+    code,
+    label,
+    documentCount,
+    lineCount,
+    quantity,
+    netSales,
+    vatTotal,
+    grossSales
+  FROM rankedRows
+  WHERE rank > @offset AND rank <= (@offset + @pageSize)
+  ORDER BY rank;
+`;
+
 class VendasService {
   async getVendasDashboard(params = {}) {
     const pool = await databaseService.getPool();
@@ -142,49 +251,7 @@ class VendasService {
       : '';
 
     const query = `
-      IF OBJECT_ID('tempdb..#vendasBase') IS NOT NULL
-        DROP TABLE #vendasBase;
-
-      SELECT
-        C.Id AS documentId,
-        C.Data AS documentDate,
-        C.TipoDoc AS documentType,
-        C.NumDoc AS documentNumber,
-        C.Entidade AS customerCode,
-        COALESCE(NULLIF(Cl.Nome, ''), C.Entidade, 'Sem cliente') AS customerName,
-        COALESCE(NULLIF(Cl.Distrito, ''), 'SEM_PROVINCIA') AS provinceCode,
-        COALESCE(NULLIF(Cl.Distrito, ''), 'Sem provincia') AS provinceName,
-        A.Artigo AS productCode,
-        COALESCE(NULLIF(A.Descricao, ''), A.Artigo, 'Sem artigo') AS productName,
-        F.Familia AS familyCode,
-        COALESCE(NULLIF(F.Descricao, ''), F.Familia, 'Sem familia') AS familyName,
-        COALESCE(NULLIF(A.Marca, ''), 'SEM_MARCA') AS brandCode,
-        COALESCE(NULLIF(M.Descricao, ''), NULLIF(A.Marca, ''), 'Sem marca') AS brandName,
-        COALESCE(NULLIF(vendorSource.vendorCode, ''), 'SEM_VENDEDOR') AS vendorCode,
-        COALESCE(NULLIF(V.Nome, ''), NULLIF(vendorSource.vendorCode, ''), 'Sem vendedor') AS vendorName,
-        COALESCE(L.Quantidade, 0) AS quantity,
-        COALESCE(L.TotalIliquido, L.PrecoLiquido, 0) AS netSales,
-        COALESCE(L.TotalIva, 0) AS vatTotal,
-        COALESCE(L.TotalIliquido, L.PrecoLiquido, 0) + COALESCE(L.TotalIva, 0) AS grossSales
-      INTO #vendasBase
-      FROM ${tables.cabecDoc} C
-      INNER JOIN ${tables.clientes} Cl ON C.Entidade = Cl.Cliente
-      INNER JOIN ${tables.linhasDoc} L ON C.Id = L.IdCabecDoc
-      INNER JOIN ${tables.artigos} A ON L.Artigo = A.Artigo
-      INNER JOIN ${tables.familias} F ON F.Familia = A.Familia
-      OUTER APPLY (
-        SELECT COALESCE(NULLIF(L.Vendedor, ''), NULLIF(C.RespCobranca, ''), NULLIF(Cl.Vendedor, '')) AS vendorCode
-      ) vendorSource
-      LEFT JOIN ${tables.vendedores} V ON V.Vendedor = vendorSource.vendorCode
-      LEFT JOIN ${tables.marcas} M ON M.Marca = A.Marca
-      WHERE C.Data >= @startDate
-        AND C.Data < DATEADD(day, 1, @endDate)
-        ${documentTypeWhere}
-        AND (@familyCode IS NULL OR A.Familia = @familyCode)
-        AND (@productCode IS NULL OR A.Artigo = @productCode)
-        AND (@vendorCode IS NULL OR COALESCE(NULLIF(vendorSource.vendorCode, ''), 'SEM_VENDEDOR') = @vendorCode)
-        AND (@brandCode IS NULL OR COALESCE(NULLIF(A.Marca, ''), 'SEM_MARCA') = @brandCode)
-        AND (@province IS NULL OR COALESCE(NULLIF(Cl.Distrito, ''), 'SEM_PROVINCIA') = @province);
+      ${buildVendasBaseTempTableQuery(documentTypeWhere)}
 
       SELECT
         ${metricSelect}
@@ -252,6 +319,57 @@ class VendasService {
         brands: recordsets[10] ?? [],
         provinces: recordsets[11] ?? []
       },
+      sourceTables: tables
+    };
+  }
+
+  async getVendasRanking(params = {}) {
+    const pool = await databaseService.getPool();
+    const dateRange = getPeriodDateRange(params.period);
+    const dimension = params.dimension ?? 'vendors';
+    const rankingDimension = rankingDimensions[dimension] ?? rankingDimensions.vendors;
+    const page = Number(params.page ?? 1);
+    const pageSize = Number(params.pageSize ?? 10);
+    const offset = (page - 1) * pageSize;
+    const documentTypePlaceholders = env.salesDocumentTypes
+      .map((_documentType, index) => `@docType${index}`)
+      .join(', ');
+    const documentTypeWhere = documentTypePlaceholders
+      ? `AND C.TipoDoc IN (${documentTypePlaceholders})`
+      : '';
+
+    const query = `
+      ${buildVendasBaseTempTableQuery(documentTypeWhere)}
+
+      ${buildRankingSelect(rankingDimension)}
+
+      DROP TABLE #vendasBase;
+    `;
+
+    const result = await addVendasInputs(pool.request(), params, dateRange)
+      .input('pageSize', sql.Int, pageSize)
+      .input('offset', sql.Int, offset)
+      .query(query);
+    const recordsets = result.recordsets ?? [];
+    const totalRows = Number(recordsets[0]?.[0]?.totalRows ?? 0);
+
+    return {
+      period: params.period,
+      dateRange,
+      dimension,
+      page,
+      pageSize,
+      totalRows,
+      totalPages: Math.max(Math.ceil(totalRows / pageSize), 1),
+      documentTypes: env.salesDocumentTypes,
+      filters: {
+        familyCode: params.familyCode ?? null,
+        productCode: params.productCode ?? null,
+        vendorCode: params.vendorCode ?? null,
+        brandCode: params.brandCode ?? null,
+        province: params.province ?? null
+      },
+      rows: recordsets[1] ?? [],
       sourceTables: tables
     };
   }

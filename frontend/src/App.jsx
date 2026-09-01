@@ -44,6 +44,7 @@ import {
   getPrimaveraModules,
   getSalesDashboard,
   getVendasDashboard,
+  getVendasRanking,
   getVendorDocuments,
   testDatabaseConnection
 } from './services/databaseApi.js';
@@ -62,13 +63,32 @@ const defaultVendasFilters = {
 const createSalesDashboardState = () => ({ loading: false, data: null, error: null });
 const createVendorDocumentsState = () => ({ loading: false, rows: [], error: null });
 const createClientesDashboardState = () => ({ loading: false, data: null, error: null });
+const createVendasRankingState = () => ({ loading: false, data: null, error: null });
 const createVendasFilters = () => ({ ...defaultVendasFilters });
 const emptyFilterOptions = [];
 const maxVisibleFilterOptions = 80;
+const clientesPageSize = 10;
+const vendasRankingPageSize = 10;
 const vendasPeriodLabels = {
   day: 'Hoje',
   month: 'Mês',
   year: 'Ano'
+};
+const vendasSubmenuItems = [
+  { key: 'summary', label: 'Resumo', icon: Columns3 },
+  { key: 'vendors', label: 'Vendedores', icon: Users },
+  { key: 'products', label: 'Produtos', icon: Package },
+  { key: 'brands', label: 'Marcas', icon: Tags }
+];
+const vendasRankingLabels = {
+  vendors: 'Ranking de vendedores',
+  products: 'Ranking de produtos',
+  brands: 'Ranking de marcas'
+};
+const vendasRankingEntityLabels = {
+  vendors: 'Vendedor',
+  products: 'Produto',
+  brands: 'Marca'
 };
 const clientesSegmentCards = [
   {
@@ -1288,15 +1308,180 @@ function SalesBreakdownPanel({
   );
 }
 
+function VendasSubmenu({ activeView, loading, onSelectView }) {
+  return (
+    <div className="sales-submenu" role="tablist" aria-label="Secções de vendas">
+      {vendasSubmenuItems.map((item) => {
+        const Icon = item.icon;
+        const isActive = activeView === item.key;
+
+        return (
+          <button
+            aria-pressed={isActive}
+            className={isActive ? 'active' : ''}
+            disabled={loading}
+            key={item.key}
+            type="button"
+            onClick={() => onSelectView(item.key)}
+          >
+            <Icon size={16} aria-hidden="true" />
+            {item.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function VendasRankingTable({ dimension, loading, rows }) {
+  const entityLabel = vendasRankingEntityLabels[dimension] ?? 'Item';
+
+  if (loading) {
+    return (
+      <div className="empty-state compact-empty-state">
+        <RefreshCw size={18} aria-hidden="true" />
+        <span>A carregar ranking</span>
+      </div>
+    );
+  }
+
+  if (!rows.length) {
+    return (
+      <div className="empty-state compact-empty-state">
+        <Table2 size={18} aria-hidden="true" />
+        <span>Sem dados para apresentar</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="table-shell ranking-table-shell">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>{entityLabel}</th>
+            <th>Código</th>
+            <th>Docs</th>
+            <th>Linhas</th>
+            <th>Qtd.</th>
+            <th>Vendas sem IVA</th>
+            <th>IVA</th>
+            <th>Vendas com IVA</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={`${dimension}-${row.rank}-${row.code}`}>
+              <td>{formatRowCount(row.rank)}</td>
+              <td>{row.label}</td>
+              <td>{row.code}</td>
+              <td>{formatRowCount(row.documentCount)}</td>
+              <td>{formatRowCount(row.lineCount)}</td>
+              <td>{formatAmount(row.quantity)}</td>
+              <td>{formatAmount(row.netSales)}</td>
+              <td>{formatAmount(row.vatTotal)}</td>
+              <td>{formatAmount(row.grossSales)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RankingPagination({ ariaLabel = 'Paginação', loading, page, pageSize, totalPages, totalRows, onPageChange }) {
+  const safeTotalPages = Math.max(Number(totalPages ?? 1), 1);
+  const safePage = Math.min(Math.max(Number(page ?? 1), 1), safeTotalPages);
+  const firstRow = totalRows > 0 ? (safePage - 1) * pageSize + 1 : 0;
+  const lastRow = totalRows > 0 ? Math.min(safePage * pageSize, totalRows) : 0;
+
+  return (
+    <div className="ranking-pagination" aria-label={ariaLabel}>
+      <span>
+        {formatRowCount(firstRow)}-{formatRowCount(lastRow)} de {formatRowCount(totalRows)}
+      </span>
+      <div>
+        <button
+          className="secondary-button compact"
+          type="button"
+          onClick={() => onPageChange(safePage - 1)}
+          disabled={loading || safePage <= 1}
+        >
+          Anterior
+        </button>
+        <span>Página {formatRowCount(safePage)} de {formatRowCount(safeTotalPages)}</span>
+        <button
+          className="secondary-button compact"
+          type="button"
+          onClick={() => onPageChange(safePage + 1)}
+          disabled={loading || safePage >= safeTotalPages}
+        >
+          Seguinte
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function VendasRankingPanel({
+  activePeriodLabel,
+  dimension,
+  page,
+  pageSize,
+  rankingDashboard,
+  onPageChange
+}) {
+  const rows = rankingDashboard.data?.rows ?? [];
+  const totalRows = Number(rankingDashboard.data?.totalRows ?? 0);
+  const totalPages = Number(rankingDashboard.data?.totalPages ?? 1);
+  const title = vendasRankingLabels[dimension] ?? 'Ranking de vendas';
+
+  return (
+    <section className="sales-ranking-panel">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Ranking</p>
+          <h2>{title}</h2>
+        </div>
+        <span className="pill">{activePeriodLabel}</span>
+      </div>
+
+      {rankingDashboard.error ? <div className="error-banner">{rankingDashboard.error}</div> : null}
+
+      <VendasRankingTable
+        dimension={dimension}
+        loading={rankingDashboard.loading}
+        rows={rows}
+      />
+
+      <RankingPagination
+        loading={rankingDashboard.loading}
+        page={page}
+        pageSize={pageSize}
+        totalPages={totalPages}
+        totalRows={totalRows}
+        onPageChange={onPageChange}
+      />
+    </section>
+  );
+}
+
 function SalesPage({
+  activeView,
   activePeriodLabel,
   filters,
+  rankingDashboard,
+  rankingPage,
+  rankingPageSize,
   salesTrend,
   salesDashboard,
   period,
-  onSelectPeriod,
   onClearFilters,
-  onFilterChange
+  onFilterChange,
+  onRankingPageChange,
+  onSelectPeriod,
+  onSelectView
 }) {
   const summary = salesDashboard.data?.summary ?? null;
   const breakdowns = salesDashboard.data?.breakdowns ?? {};
@@ -1308,6 +1493,7 @@ function SalesPage({
   const vatTotal = Number(summary?.vatTotal ?? 0);
   const averageDocumentValue = documentCount > 0 ? grossSales / documentCount : 0;
   const hasResult = Boolean(salesDashboard.data);
+  const rankingDimension = activeView === 'summary' ? 'vendors' : activeView;
 
   return (
     <section className="sales-page">
@@ -1336,98 +1522,117 @@ function SalesPage({
 
       {salesDashboard.error ? <div className="error-banner">{salesDashboard.error}</div> : null}
 
-      <div className="sales-kpi-grid">
-        <StatusCard
-          icon={Banknote}
-          label="Vendas sem IVA"
-          value={salesDashboard.loading ? 'A carregar' : formatAmount(netSales)}
-          tone="success"
-          detail={hasResult ? `Total líquido em ${activePeriodLabel}` : 'Sem vendas disponíveis no período'}
-        />
-        <StatusCard
-          icon={ReceiptText}
-          label="Vendas com IVA"
-          value={salesDashboard.loading ? 'A carregar' : formatAmount(grossSales)}
-          tone="neutral"
-          detail={hasResult ? `Valor bruto em ${activePeriodLabel}` : 'Sem vendas disponíveis no período'}
-        />
-        <StatusCard
-          icon={Percent}
-          label="IVA"
-          value={salesDashboard.loading ? 'A carregar' : formatAmount(vatTotal)}
-          tone="neutral"
-          detail={hasResult ? `IVA liquidado em ${activePeriodLabel}` : 'Sem IVA disponível no período'}
-        />
-        <StatusCard
-          icon={FileText}
-          label="Documentos"
-          value={salesDashboard.loading ? 'A carregar' : formatRowCount(documentCount)}
-          tone="neutral"
-          detail={hasResult ? `${formatRowCount(lineCount)} linhas · ticket médio ${formatAmount(averageDocumentValue)}` : 'Sem documentos disponíveis'}
-        />
-      </div>
+      <VendasSubmenu
+        activeView={activeView}
+        loading={salesDashboard.loading}
+        onSelectView={onSelectView}
+      />
 
-      <div className="sales-main-grid">
-        <VendasTrendChart
-          items={salesTrend}
-          loading={salesDashboard.loading}
-          period={period}
-        />
-        <MonthlyGoalCard
-          actualSales={summary?.netSales}
-          hasResult={hasResult}
-          loading={salesDashboard.loading}
-          periodLabel={activePeriodLabel}
-        />
-      </div>
+      {activeView === 'summary' ? (
+        <>
+          <div className="sales-kpi-grid">
+            <StatusCard
+              icon={Banknote}
+              label="Vendas sem IVA"
+              value={salesDashboard.loading ? 'A carregar' : formatAmount(netSales)}
+              tone="success"
+              detail={hasResult ? `Total líquido em ${activePeriodLabel}` : 'Sem vendas disponíveis no período'}
+            />
+            <StatusCard
+              icon={ReceiptText}
+              label="Vendas com IVA"
+              value={salesDashboard.loading ? 'A carregar' : formatAmount(grossSales)}
+              tone="neutral"
+              detail={hasResult ? `Valor bruto em ${activePeriodLabel}` : 'Sem vendas disponíveis no período'}
+            />
+            <StatusCard
+              icon={Percent}
+              label="IVA"
+              value={salesDashboard.loading ? 'A carregar' : formatAmount(vatTotal)}
+              tone="neutral"
+              detail={hasResult ? `IVA liquidado em ${activePeriodLabel}` : 'Sem IVA disponível no período'}
+            />
+            <StatusCard
+              icon={FileText}
+              label="Documentos"
+              value={salesDashboard.loading ? 'A carregar' : formatRowCount(documentCount)}
+              tone="neutral"
+              detail={hasResult ? `${formatRowCount(lineCount)} linhas · ticket médio ${formatAmount(averageDocumentValue)}` : 'Sem documentos disponíveis'}
+            />
+          </div>
 
-      <div className="sales-breakdown-grid">
-        <SalesBreakdownPanel
-          activeValue={filters.familyCode}
-          filterKey="familyCode"
-          icon={Blocks}
-          items={breakdowns.families ?? []}
-          loading={salesDashboard.loading}
-          onSelectFilter={onFilterChange}
-          title="Vendas por família"
+          <div className="sales-main-grid">
+            <VendasTrendChart
+              items={salesTrend}
+              loading={salesDashboard.loading}
+              period={period}
+            />
+            <MonthlyGoalCard
+              actualSales={summary?.netSales}
+              hasResult={hasResult}
+              loading={salesDashboard.loading}
+              periodLabel={activePeriodLabel}
+            />
+          </div>
+
+          <div className="sales-breakdown-grid">
+            <SalesBreakdownPanel
+              activeValue={filters.familyCode}
+              filterKey="familyCode"
+              icon={Blocks}
+              items={breakdowns.families ?? []}
+              loading={salesDashboard.loading}
+              onSelectFilter={onFilterChange}
+              title="Vendas por família"
+            />
+            <SalesBreakdownPanel
+              activeValue={filters.productCode}
+              filterKey="productCode"
+              icon={Package}
+              items={breakdowns.products ?? []}
+              loading={salesDashboard.loading}
+              onSelectFilter={onFilterChange}
+              title="Vendas por produto"
+            />
+            <SalesBreakdownPanel
+              activeValue={filters.vendorCode}
+              filterKey="vendorCode"
+              icon={Users}
+              items={breakdowns.vendors ?? []}
+              loading={salesDashboard.loading}
+              onSelectFilter={onFilterChange}
+              title="Vendas por vendedor"
+            />
+            <SalesBreakdownPanel
+              activeValue={filters.brandCode}
+              filterKey="brandCode"
+              icon={Tags}
+              items={breakdowns.brands ?? []}
+              loading={salesDashboard.loading}
+              onSelectFilter={onFilterChange}
+              title="Vendas por marca"
+            />
+            <SalesBreakdownPanel
+              activeValue={filters.province}
+              filterKey="province"
+              icon={MapPin}
+              items={breakdowns.provinces ?? []}
+              loading={salesDashboard.loading}
+              onSelectFilter={onFilterChange}
+              title="Vendas por província"
+            />
+          </div>
+        </>
+      ) : (
+        <VendasRankingPanel
+          activePeriodLabel={activePeriodLabel}
+          dimension={rankingDimension}
+          page={rankingPage}
+          pageSize={rankingPageSize}
+          rankingDashboard={rankingDashboard}
+          onPageChange={onRankingPageChange}
         />
-        <SalesBreakdownPanel
-          activeValue={filters.productCode}
-          filterKey="productCode"
-          icon={Package}
-          items={breakdowns.products ?? []}
-          loading={salesDashboard.loading}
-          onSelectFilter={onFilterChange}
-          title="Vendas por produto"
-        />
-        <SalesBreakdownPanel
-          activeValue={filters.vendorCode}
-          filterKey="vendorCode"
-          icon={Users}
-          items={breakdowns.vendors ?? []}
-          loading={salesDashboard.loading}
-          onSelectFilter={onFilterChange}
-          title="Vendas por vendedor"
-        />
-        <SalesBreakdownPanel
-          activeValue={filters.brandCode}
-          filterKey="brandCode"
-          icon={Tags}
-          items={breakdowns.brands ?? []}
-          loading={salesDashboard.loading}
-          onSelectFilter={onFilterChange}
-          title="Vendas por marca"
-        />
-        <SalesBreakdownPanel
-          activeValue={filters.province}
-          filterKey="province"
-          icon={MapPin}
-          items={breakdowns.provinces ?? []}
-          loading={salesDashboard.loading}
-          onSelectFilter={onFilterChange}
-          title="Vendas por província"
-        />
-      </div>
+      )}
     </section>
   );
 }
@@ -1509,7 +1714,7 @@ function ClientesTable({ loading, rows }) {
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={`${row.customerCode}-${row.segment}`}>
+            <tr key={`${row.rowNumber}-${row.customerCode}-${row.segment}`}>
               <td>{row.customerCode}</td>
               <td>{row.customerName}</td>
               <td>{row.provinceName}</td>
@@ -1526,9 +1731,18 @@ function ClientesTable({ loading, rows }) {
   );
 }
 
-function ClientesPage({ clientesDashboard, selectedSegment, onSelectSegment }) {
+function ClientesPage({
+  clientesDashboard,
+  page,
+  pageSize,
+  selectedSegment,
+  onPageChange,
+  onSelectSegment
+}) {
   const summary = clientesDashboard.data?.summary ?? {};
   const rows = clientesDashboard.data?.rows ?? [];
+  const totalRows = Number(clientesDashboard.data?.totalRows ?? 0);
+  const totalPages = Number(clientesDashboard.data?.totalPages ?? 1);
   const selectedSegmentLabel = clientesSegmentLabels[selectedSegment] ?? 'Clientes';
 
   return (
@@ -1562,9 +1776,18 @@ function ClientesPage({ clientesDashboard, selectedSegment, onSelectSegment }) {
             <p className="eyebrow">Lista</p>
             <h2>{selectedSegmentLabel}</h2>
           </div>
-          <span className="pill">{clientesDashboard.loading ? 'A carregar' : `${formatRowCount(rows.length)} linhas`}</span>
+          <span className="pill">{clientesDashboard.loading ? 'A carregar' : `${formatRowCount(totalRows)} clientes`}</span>
         </div>
         <ClientesTable loading={clientesDashboard.loading} rows={rows} />
+        <RankingPagination
+          ariaLabel="Paginação de clientes"
+          loading={clientesDashboard.loading}
+          page={page}
+          pageSize={pageSize}
+          totalPages={totalPages}
+          totalRows={totalRows}
+          onPageChange={onPageChange}
+        />
       </section>
     </section>
   );
@@ -1583,8 +1806,16 @@ export default function App() {
   const [vendasSalesDashboard, setVendasSalesDashboard] = useState(createSalesDashboardState);
   const [vendasPeriod, setVendasPeriod] = useState('month');
   const [vendasFilters, setVendasFilters] = useState(createVendasFilters);
+  const [vendasView, setVendasView] = useState('summary');
+  const [vendasRankingDashboard, setVendasRankingDashboard] = useState(createVendasRankingState);
+  const [vendasRankingPages, setVendasRankingPages] = useState({
+    vendors: 1,
+    products: 1,
+    brands: 1
+  });
   const [clientesDashboard, setClientesDashboard] = useState(createClientesDashboardState);
   const [clientesSegment, setClientesSegment] = useState('total');
+  const [clientesPage, setClientesPage] = useState(1);
   const [tableSearch, setTableSearch] = useState('');
   const [tablesState, setTablesState] = useState({ loading: false, tables: [], error: null });
   const [selectedTable, setSelectedTable] = useState(null);
@@ -1627,6 +1858,7 @@ export default function App() {
     [vendasActiveSalesDateRange, vendasPeriod]
   );
   const vendasSalesTrend = vendasSalesDashboard.data?.trend ?? [];
+  const vendasActiveRankingPage = vendasRankingPages[vendasView] ?? 1;
 
   const databaseDetail = useMemo(() => {
     if (database.data?.databaseName) return database.data.databaseName;
@@ -1724,13 +1956,45 @@ export default function App() {
     }
   };
 
-  const loadClientesDashboard = async (segment = clientesSegment) => {
+  const loadVendasRanking = async ({
+    dimension = vendasView,
+    filters = vendasFilters,
+    page = vendasRankingPages[dimension] ?? 1,
+    period = vendasPeriod
+  } = {}) => {
+    if (dimension === 'summary') {
+      return;
+    }
+
+    setVendasRankingDashboard((current) => ({ ...current, loading: true, error: null }));
+
+    try {
+      const response = await getVendasRanking({
+        period,
+        ...filters,
+        dimension,
+        page,
+        pageSize: vendasRankingPageSize
+      });
+
+      setVendasRankingDashboard({
+        loading: false,
+        data: response.data,
+        error: null
+      });
+    } catch (error) {
+      setVendasRankingDashboard({ loading: false, data: null, error: error.message });
+    }
+  };
+
+  const loadClientesDashboard = async (segment = clientesSegment, page = clientesPage) => {
     setClientesDashboard((current) => ({ ...current, loading: true, error: null }));
 
     try {
       const response = await getClientesDashboard({
         segment,
-        limit: 200
+        page,
+        pageSize: clientesPageSize
       });
 
       setClientesDashboard({
@@ -1844,6 +2108,19 @@ export default function App() {
   const applyVendasSalesPeriod = (period) => {
     setVendasPeriod(period);
     loadVendasSalesDashboard(period, vendasFilters);
+
+    if (vendasView !== 'summary') {
+      setVendasRankingPages((current) => ({
+        ...current,
+        [vendasView]: 1
+      }));
+      loadVendasRanking({
+        dimension: vendasView,
+        filters: vendasFilters,
+        page: 1,
+        period
+      });
+    }
   };
 
   const updateVendasFilter = (filterKey, value) => {
@@ -1853,19 +2130,83 @@ export default function App() {
     };
 
     setVendasFilters(nextFilters);
+    setVendasRankingPages({
+      vendors: 1,
+      products: 1,
+      brands: 1
+    });
     loadVendasSalesDashboard(vendasPeriod, nextFilters);
+
+    if (vendasView !== 'summary') {
+      loadVendasRanking({
+        dimension: vendasView,
+        filters: nextFilters,
+        page: 1,
+        period: vendasPeriod
+      });
+    }
   };
 
   const clearVendasFilters = () => {
     const nextFilters = createVendasFilters();
 
     setVendasFilters(nextFilters);
+    setVendasRankingPages({
+      vendors: 1,
+      products: 1,
+      brands: 1
+    });
     loadVendasSalesDashboard(vendasPeriod, nextFilters);
+
+    if (vendasView !== 'summary') {
+      loadVendasRanking({
+        dimension: vendasView,
+        filters: nextFilters,
+        page: 1,
+        period: vendasPeriod
+      });
+    }
+  };
+
+  const selectVendasView = (view) => {
+    setVendasView(view);
+
+    if (view !== 'summary') {
+      loadVendasRanking({
+        dimension: view,
+        page: vendasRankingPages[view] ?? 1
+      });
+    }
+  };
+
+  const selectVendasRankingPage = (page) => {
+    if (vendasView === 'summary') {
+      return;
+    }
+
+    const nextPage = Math.max(Number(page), 1);
+
+    setVendasRankingPages((current) => ({
+      ...current,
+      [vendasView]: nextPage
+    }));
+    loadVendasRanking({
+      dimension: vendasView,
+      page: nextPage
+    });
   };
 
   const selectClientesSegment = (segment) => {
+    setClientesPage(1);
     setClientesSegment(segment);
-    loadClientesDashboard(segment);
+    loadClientesDashboard(segment, 1);
+  };
+
+  const selectClientesPage = (page) => {
+    const nextPage = Math.max(Number(page), 1);
+
+    setClientesPage(nextPage);
+    loadClientesDashboard(clientesSegment, nextPage);
   };
 
   const submitTableSearch = (event) => {
@@ -1919,6 +2260,21 @@ export default function App() {
       loadVendasSalesDashboard();
     }
   }, [activePage]);
+
+  useEffect(() => {
+    if (
+      activePage === 'sales' &&
+      vendasView !== 'summary' &&
+      !vendasRankingDashboard.loading &&
+      (!vendasRankingDashboard.data || vendasRankingDashboard.data.dimension !== vendasView) &&
+      !vendasRankingDashboard.error
+    ) {
+      loadVendasRanking({
+        dimension: vendasView,
+        page: vendasActiveRankingPage
+      });
+    }
+  }, [activePage, vendasView]);
 
   useEffect(() => {
     if (
@@ -2014,6 +2370,14 @@ export default function App() {
               refreshStatus();
               if (activePage === 'sales') {
                 loadVendasSalesDashboard();
+
+                if (vendasView !== 'summary') {
+                  loadVendasRanking({
+                    dimension: vendasView,
+                    page: vendasActiveRankingPage
+                  });
+                }
+
                 return;
               }
 
@@ -2143,20 +2507,29 @@ export default function App() {
         {activePage === 'sales' ? (
           <SalesPage
             activePeriodLabel={vendasActivePeriodLabel}
+            activeView={vendasView}
             filters={vendasFilters}
             period={vendasPeriod}
+            rankingDashboard={vendasRankingDashboard}
+            rankingPage={vendasActiveRankingPage}
+            rankingPageSize={vendasRankingPageSize}
             salesDashboard={vendasSalesDashboard}
             salesTrend={vendasSalesTrend}
             onClearFilters={clearVendasFilters}
             onFilterChange={updateVendasFilter}
+            onRankingPageChange={selectVendasRankingPage}
             onSelectPeriod={applyVendasSalesPeriod}
+            onSelectView={selectVendasView}
           />
         ) : null}
 
         {activePage === 'customers' ? (
           <ClientesPage
             clientesDashboard={clientesDashboard}
+            page={clientesPage}
+            pageSize={clientesPageSize}
             selectedSegment={clientesSegment}
+            onPageChange={selectClientesPage}
             onSelectSegment={selectClientesSegment}
           />
         ) : null}

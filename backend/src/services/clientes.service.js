@@ -21,10 +21,14 @@ const addDocumentTypeInputs = (request) => {
 
 const addClientesInputs = (request, params) => {
   addDocumentTypeInputs(request);
+  const page = Number(params.page ?? 1);
+  const pageSize = Number(params.pageSize ?? params.limit ?? 10);
+  const offset = (page - 1) * pageSize;
 
   return request
     .input('segment', sql.NVarChar(20), params.segment ?? 'total')
-    .input('limit', sql.Int, Number(params.limit ?? 200));
+    .input('pageSize', sql.Int, pageSize)
+    .input('offset', sql.Int, offset);
 };
 
 const zeroSummary = {
@@ -102,7 +106,41 @@ class ClientesService {
       FROM #clientesBase
       GROUP BY segment;
 
-      SELECT TOP (@limit)
+      SELECT COUNT(*) AS totalRows
+      FROM #clientesBase
+      WHERE @segment = 'total' OR segment = @segment;
+
+      WITH rankedClientes AS (
+        SELECT
+          ROW_NUMBER() OVER (
+            ORDER BY
+              CASE segment
+                WHEN 'active' THEN 1
+                WHEN 'attention' THEN 2
+                WHEN 'risk' THEN 3
+                ELSE 4
+              END,
+              CASE WHEN lastPurchaseDate IS NULL THEN 1 ELSE 0 END,
+              lastPurchaseDate DESC,
+              customerName ASC
+          ) AS rowNumber,
+          customerCode,
+          customerName,
+          provinceName,
+          vendorCode,
+          vendorName,
+          lastPurchaseDate,
+          daysSinceLastPurchase,
+          purchaseDocumentCount,
+          netSales,
+          vatTotal,
+          grossSales,
+          segment
+        FROM #clientesBase
+        WHERE @segment = 'total' OR segment = @segment
+      )
+      SELECT
+        rowNumber,
         customerCode,
         customerName,
         provinceName,
@@ -115,32 +153,29 @@ class ClientesService {
         vatTotal,
         grossSales,
         segment
-      FROM #clientesBase
-      WHERE @segment = 'total' OR segment = @segment
-      ORDER BY
-        CASE segment
-          WHEN 'active' THEN 1
-          WHEN 'attention' THEN 2
-          WHEN 'risk' THEN 3
-          ELSE 4
-        END,
-        CASE WHEN lastPurchaseDate IS NULL THEN 1 ELSE 0 END,
-        lastPurchaseDate DESC,
-        customerName ASC;
+      FROM rankedClientes
+      WHERE rowNumber > @offset AND rowNumber <= (@offset + @pageSize)
+      ORDER BY rowNumber;
 
       DROP TABLE #clientesBase;
     `;
 
     const result = await addClientesInputs(pool.request(), params).query(query);
     const recordsets = result.recordsets ?? [];
+    const page = Number(params.page ?? 1);
+    const pageSize = Number(params.pageSize ?? params.limit ?? 10);
+    const totalRows = Number(recordsets[2]?.[0]?.totalRows ?? 0);
 
     return {
       segment: params.segment ?? 'total',
-      limit: Number(params.limit ?? 200),
+      page,
+      pageSize,
+      totalRows,
+      totalPages: Math.max(Math.ceil(totalRows / pageSize), 1),
       documentTypes: env.salesDocumentTypes,
       summary: recordsets[0]?.[0] ?? zeroSummary,
       segments: recordsets[1] ?? [],
-      rows: recordsets[2] ?? [],
+      rows: recordsets[3] ?? [],
       sourceTables: tables
     };
   }

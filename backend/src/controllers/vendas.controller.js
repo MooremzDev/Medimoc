@@ -9,3 +9,12 @@ export const getVendasDashboard = asyncHandler(async (req, res) => {
     data
   });
 });
+
+export const getVendasRanking = asyncHandler(async (req, res) => {
+  const data = await vendasService.getVendasRanking(req.validatedQuery);
+
+  res.json({
+    success: true,
+    data
+  });
+});

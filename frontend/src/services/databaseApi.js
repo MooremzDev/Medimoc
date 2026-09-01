@@ -31,6 +31,11 @@ export const getVendasDashboard = (params = {}) => {
   return apiClient.get(`/vendas${query ? `?${query}` : ''}`);
 };
 
+export const getVendasRanking = (params = {}) => {
+  const query = toQueryString(params);
+  return apiClient.get(`/vendas/rankings${query ? `?${query}` : ''}`);
+};
+
 export const getClientesDashboard = (params = {}) => {
   const query = toQueryString(params);
   return apiClient.get(`/clientes${query ? `?${query}` : ''}`);

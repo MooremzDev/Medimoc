@@ -24,6 +24,7 @@ router.get('/', (_req, res) => {
         salesDashboard: '/api/dashboard/sales',
         salesVendorDocuments: '/api/dashboard/sales/vendor-documents',
         vendas: '/api/vendas',
+        vendasRankings: '/api/vendas/rankings',
         selectQuery: '/api/database/select',
         primaveraModules: '/api/primavera/modules'
       }

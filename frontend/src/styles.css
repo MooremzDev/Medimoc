@@ -547,6 +547,87 @@ nav button:hover:not(.active) {
   margin-top: 0;
 }
 
+.sales-submenu {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  overflow-x: auto;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(32, 26, 28, 0.04);
+}
+
+.sales-submenu button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 7px 11px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+}
+
+.sales-submenu button:hover,
+.sales-submenu button.active {
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.sales-submenu button:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.sales-ranking-panel {
+  min-width: 0;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.sales-ranking-panel .section-heading {
+  margin-bottom: 14px;
+}
+
+.ranking-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ranking-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ranking-pagination .secondary-button {
+  min-width: 86px;
+}
+
+.ranking-table-shell td:first-child {
+  color: var(--accent-strong);
+  font-weight: 900;
+}
+
 .sales-kpi-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1789,6 +1870,7 @@ td {
   }
 
   .sales-heading-actions,
+  .sales-submenu,
   .period-toggle {
     width: 100%;
   }
@@ -1803,6 +1885,15 @@ td {
   }
 
   .monthly-chart-metrics {
+    justify-content: flex-start;
+  }
+
+  .ranking-pagination {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ranking-pagination > div {
     justify-content: flex-start;
   }
 

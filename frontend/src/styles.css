@@ -291,6 +291,7 @@ nav button:hover:not(.active) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+  align-items: stretch;
   margin-bottom: 24px;
 }
 
@@ -312,6 +313,7 @@ nav button:hover:not(.active) {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
+  align-items: stretch;
 }
 
 .customer-status-card {
@@ -344,8 +346,32 @@ nav button:hover:not(.active) {
   font-size: 22px;
 }
 
+.status-grid .status-card,
+.customer-status-grid .customer-status-card,
+.metric-grid .status-card,
+.sales-kpi-grid .status-card,
+.module-grid .module-tile {
+  height: 150px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.status-card > :last-child,
+.customer-status-card > :last-child,
+.module-tile > div {
+  flex: 1;
+  min-width: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
 .customers-table-panel {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 680px;
+  overflow: hidden;
   padding: 18px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -589,6 +615,10 @@ nav button:hover:not(.active) {
 
 .sales-ranking-panel {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 680px;
+  overflow: hidden;
   padding: 18px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -632,6 +662,7 @@ nav button:hover:not(.active) {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
+  align-items: stretch;
 }
 
 .sales-main-grid {
@@ -642,15 +673,26 @@ nav button:hover:not(.active) {
 }
 
 .sales-main-grid .monthly-chart-panel,
+.sales-main-grid .vendas-trend-panel,
 .sales-main-grid .goal-card {
-  height: 100%;
+  height: 430px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .sales-analysis-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
-  align-items: start;
+  align-items: stretch;
+}
+
+.sales-analysis-grid .chart-panel,
+.sales-analysis-grid .detail-panel {
+  display: flex;
+  flex-direction: column;
+  height: 430px;
+  overflow: hidden;
 }
 
 .sales-page .chart-panel,
@@ -662,7 +704,14 @@ nav button:hover:not(.active) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
-  align-items: start;
+  align-items: stretch;
+}
+
+.sales-breakdown-grid .breakdown-panel {
+  display: flex;
+  flex-direction: column;
+  height: 360px;
+  overflow: hidden;
 }
 
 .sales-breakdown-grid .breakdown-panel:first-child {
@@ -670,6 +719,8 @@ nav button:hover:not(.active) {
 }
 
 .vendas-trend-panel {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
@@ -677,6 +728,7 @@ nav button:hover:not(.active) {
   display: flex;
   align-items: end;
   gap: 10px;
+  flex: 1;
   min-height: 260px;
   padding: 12px 0 2px;
   overflow-x: auto;
@@ -728,6 +780,10 @@ nav button:hover:not(.active) {
 .breakdown-list {
   display: grid;
   gap: 2px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .breakdown-row {
@@ -811,6 +867,7 @@ nav button:hover:not(.active) {
 
 .monthly-chart-panel {
   min-width: 0;
+  overflow: hidden;
   padding: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -958,6 +1015,7 @@ nav button:hover:not(.active) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+  align-items: stretch;
   margin-bottom: 18px;
 }
 
@@ -965,12 +1023,13 @@ nav button:hover:not(.active) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .chart-panel,
 .detail-panel {
   min-width: 0;
+  overflow: hidden;
   padding: 18px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -986,7 +1045,23 @@ nav button:hover:not(.active) {
   margin-bottom: 0;
 }
 
+.dashboard-details .detail-panel {
+  display: flex;
+  flex-direction: column;
+  height: 430px;
+  overflow: hidden;
+}
+
+.dashboard-details .empty-state {
+  flex: 1;
+  min-height: 0;
+}
+
 .recent-documents-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: 680px;
+  overflow: hidden;
   margin-top: 18px;
 }
 
@@ -1000,6 +1075,13 @@ nav button:hover:not(.active) {
   display: grid;
   gap: 12px;
   margin: 14px 0 18px;
+}
+
+.dashboard-details .bar-chart {
+  flex: 1;
+  min-height: 0;
+  padding-right: 4px;
+  overflow-y: auto;
 }
 
 .bar-row {
@@ -1092,7 +1174,9 @@ nav button:hover:not(.active) {
   display: flex;
   align-items: flex-start;
   gap: 14px;
+  min-width: 0;
   min-height: 132px;
+  overflow: hidden;
   padding: 18px;
 }
 
@@ -1251,39 +1335,39 @@ select:disabled {
   gap: 6px;
 }
 
-.document-chart-layout {
-  display: grid;
-  grid-template-columns: minmax(170px, 0.8fr) minmax(190px, 1.2fr);
-  gap: 14px;
+.document-type-strip {
+  display: flex;
   align-items: stretch;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  padding: 2px 2px 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
 }
 
-.vertical-chart {
-  display: flex;
-  align-items: end;
-  justify-content: space-around;
-  gap: 14px;
-  min-height: 250px;
-  padding: 18px 12px 12px;
+.document-type-card {
+  display: grid;
+  grid-template-rows: minmax(150px, 1fr) auto;
+  justify-items: center;
+  gap: 12px;
+  flex: 0 0 148px;
+  height: 330px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px 12px;
   background: #ffffff;
   border: 1px solid var(--border);
   border-radius: 8px;
-}
-
-.vertical-bar-item {
-  display: grid;
-  grid-template-rows: 1fr auto;
-  justify-items: center;
-  gap: 10px;
-  min-width: 54px;
-  height: 100%;
+  scroll-snap-align: start;
 }
 
 .vertical-bar-track {
   display: flex;
   align-items: end;
   width: 36px;
-  height: 200px;
+  height: 190px;
   overflow: hidden;
   background: var(--surface-strong);
   border-radius: 999px;
@@ -1299,55 +1383,37 @@ select:disabled {
   opacity: 0.78;
 }
 
-.vertical-bar-item strong {
-  color: var(--text);
-  font-size: 13px;
+.document-type-detail {
+  width: 100%;
+  max-height: 116px;
+  overflow-y: auto;
+  text-align: center;
 }
 
-.document-breakdown {
-  display: grid;
-  gap: 10px;
-}
-
-.document-breakdown-item {
-  display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 64px;
-  padding: 12px;
-  background: #ffffff;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-.document-breakdown-item > span {
-  width: 12px;
-  height: 36px;
-  border-radius: 999px;
-}
-
-.document-breakdown-item strong,
-.document-breakdown-item small {
+.document-type-detail strong,
+.document-type-detail span,
+.document-type-detail em {
   display: block;
+  overflow-wrap: anywhere;
 }
 
-.document-breakdown-item strong {
+.document-type-detail strong {
   color: var(--text);
+  font-size: 14px;
 }
 
-.document-breakdown-item small {
+.document-type-detail span {
   margin-top: 4px;
   color: var(--muted);
   font-size: 12px;
 }
 
-.document-breakdown-item em {
+.document-type-detail em {
+  display: block;
+  margin-top: 8px;
   color: var(--accent-strong);
   font-style: normal;
   font-weight: 800;
-  text-align: right;
-  white-space: nowrap;
 }
 
 .pie-layout {
@@ -1611,6 +1677,14 @@ select:disabled {
   border-radius: 8px;
 }
 
+.recent-documents-panel .table-shell,
+.customers-table-panel .table-shell,
+.sales-ranking-panel .table-shell {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
 table {
   width: 100%;
   min-width: 720px;
@@ -1668,13 +1742,16 @@ td {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
+  align-items: stretch;
 }
 
 .module-tile {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  min-width: 0;
   min-height: 96px;
+  overflow: hidden;
   padding: 16px;
   background: #ffffff;
   border: 1px solid var(--border);
@@ -1774,10 +1851,6 @@ td {
     grid-template-columns: 1fr;
   }
 
-  .document-chart-layout {
-    grid-template-columns: 1fr;
-  }
-
   .bar-row {
     grid-template-columns: minmax(140px, 220px) minmax(120px, 1fr) 116px;
   }
@@ -1830,23 +1903,18 @@ td {
     grid-template-columns: 1fr;
   }
 
-  .vertical-chart {
-    min-height: 220px;
-    overflow-x: auto;
-    justify-content: flex-start;
+  .dashboard-details .detail-panel {
+    height: 390px;
   }
 
   .vertical-bar-track {
     height: 170px;
   }
 
-  .document-breakdown-item {
-    grid-template-columns: 12px minmax(0, 1fr);
-  }
-
-  .document-breakdown-item em {
-    grid-column: 2;
-    text-align: left;
+  .document-type-card {
+    flex-basis: 138px;
+    height: 300px;
+    min-height: 0;
   }
 
   .bar-row {

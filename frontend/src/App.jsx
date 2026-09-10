@@ -537,41 +537,30 @@ function DocumentTypeVerticalChart({ items }) {
   }
 
   return (
-    <div className="document-chart-layout">
-      <div className="vertical-chart" aria-label="Vendas por tipo de documento">
-        {documentTypes.map((item, index) => {
-          const height = Math.max((Math.abs(item.grossSales) / maxValue) * 100, 6);
-          const isNegative = item.grossSales < 0;
+    <div className="document-type-strip" aria-label="Vendas por tipo de documento">
+      {documentTypes.map((item, index) => {
+        const height = Math.max((Math.abs(item.grossSales) / maxValue) * 100, 6);
+        const isNegative = item.grossSales < 0;
 
-          return (
-            <div className="vertical-bar-item" key={item.type}>
-              <div className="vertical-bar-track">
-                <div
-                  className={`vertical-bar-fill ${isNegative ? 'negative' : ''}`}
-                  style={{
-                    height: `${height}%`,
-                    backgroundColor: isNegative ? '#7b7780' : pieColors[index % pieColors.length]
-                  }}
-                />
-              </div>
-              <strong>{item.type}</strong>
+        return (
+          <article className="document-type-card" key={item.type}>
+            <div className="vertical-bar-track">
+              <div
+                className={`vertical-bar-fill ${isNegative ? 'negative' : ''}`}
+                style={{
+                  height: `${height}%`,
+                  backgroundColor: isNegative ? '#7b7780' : pieColors[index % pieColors.length]
+                }}
+              />
             </div>
-          );
-        })}
-      </div>
-
-      <div className="document-breakdown">
-        {documentTypes.map((item, index) => (
-          <article className="document-breakdown-item" key={item.type}>
-            <span style={{ backgroundColor: item.grossSales < 0 ? '#7b7780' : pieColors[index % pieColors.length] }} />
-            <div>
+            <div className="document-type-detail">
               <strong>{item.type}</strong>
-              <small>{item.documents} documentos</small>
+              <span>{formatRowCount(item.documents)} documentos</span>
+              <em>{formatAmount(item.grossSales)}</em>
             </div>
-            <em>{formatAmount(item.grossSales)}</em>
           </article>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }

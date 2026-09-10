@@ -313,7 +313,6 @@ nav button:hover:not(.active) {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 16px;
-  align-items: stretch;
 }
 
 .customer-status-card {
@@ -347,7 +346,6 @@ nav button:hover:not(.active) {
 }
 
 .status-grid .status-card,
-.customer-status-grid .customer-status-card,
 .metric-grid .status-card,
 .sales-kpi-grid .status-card,
 .module-grid .module-tile {
@@ -357,7 +355,6 @@ nav button:hover:not(.active) {
 }
 
 .status-card > :last-child,
-.customer-status-card > :last-child,
 .module-tile > div {
   flex: 1;
   min-width: 0;
@@ -635,18 +632,41 @@ nav button:hover:not(.active) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   margin-top: 12px;
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
 }
 
-.ranking-pagination > div {
+.pagination-actions,
+.pagination-jump {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.pagination-actions {
   justify-content: flex-end;
+}
+
+.pagination-jump {
+  margin-left: auto;
+}
+
+.pagination-jump label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pagination-jump input {
+  width: 76px;
+  min-height: 34px;
+  padding: 6px 8px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .ranking-pagination .secondary-button {
@@ -704,13 +724,13 @@ nav button:hover:not(.active) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .sales-breakdown-grid .breakdown-panel {
   display: flex;
   flex-direction: column;
-  height: 360px;
+  max-height: 360px;
   overflow: hidden;
 }
 
@@ -825,9 +845,25 @@ nav button:hover:not(.active) {
 }
 
 .breakdown-row-main strong,
-.breakdown-row-main span {
+.breakdown-row-meta {
   display: block;
   overflow-wrap: anywhere;
+}
+
+.single-line-fit {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.single-line-fit > strong {
+  display: inline-block;
+  max-width: none;
+  line-height: 1.15;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .breakdown-row-main strong {
@@ -835,7 +871,7 @@ nav button:hover:not(.active) {
   font-size: 14px;
 }
 
-.breakdown-row-main span {
+.breakdown-row-meta {
   margin-top: 4px;
   color: var(--muted);
   font-size: 12px;
@@ -1961,8 +1997,13 @@ td {
     flex-direction: column;
   }
 
-  .ranking-pagination > div {
+  .pagination-actions,
+  .pagination-jump {
     justify-content: flex-start;
+  }
+
+  .pagination-jump {
+    margin-left: 0;
   }
 
   .table-search {

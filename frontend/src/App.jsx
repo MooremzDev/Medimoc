@@ -33,7 +33,7 @@
   Users,
   X
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   executeSelectQuery,
   getClientesDashboard,
@@ -198,6 +198,67 @@ function StatusCard({ icon: Icon, label, value, tone = 'neutral', detail }) {
         {detail ? <p className="muted">{detail}</p> : null}
       </div>
     </section>
+  );
+}
+
+function SingleLineFitText({ children, className = '', maxSize = 14, minSize = 8 }) {
+  const frameRef = useRef(null);
+  const textRef = useRef(null);
+  const [fontSize, setFontSize] = useState(maxSize);
+
+  useLayoutEffect(() => {
+    const frame = frameRef.current;
+    const text = textRef.current;
+
+    if (!frame || !text) {
+      return undefined;
+    }
+
+    let animationFrame = 0;
+
+    const updateSize = () => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(() => {
+        text.style.fontSize = `${maxSize}px`;
+
+        const availableWidth = frame.clientWidth;
+        const neededWidth = text.scrollWidth;
+        const nextSize =
+          availableWidth > 0 && neededWidth > availableWidth
+            ? Math.max(minSize, Math.floor((availableWidth / neededWidth) * maxSize * 10) / 10)
+            : maxSize;
+
+        text.style.fontSize = `${nextSize}px`;
+        setFontSize(nextSize);
+      });
+    };
+
+    updateSize();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateSize);
+
+      return () => {
+        cancelAnimationFrame(animationFrame);
+        window.removeEventListener('resize', updateSize);
+      };
+    }
+
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(frame);
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      observer.disconnect();
+    };
+  }, [children, maxSize, minSize]);
+
+  return (
+    <span className={`single-line-fit ${className}`.trim()} ref={frameRef}>
+      <strong ref={textRef} style={{ fontSize: `${fontSize}px` }}>
+        {children}
+      </strong>
+    </span>
   );
 }
 
@@ -602,7 +663,7 @@ function VendorBarChart({ items, onSelectVendor, selectedVendorCode }) {
           >
             <div className="bar-label">
               <strong>{vendor.name}</strong>
-              <span>{vendor.code} · {vendor.documents} documentos</span>
+              <span>{formatRowCount(vendor.documents)} documentos</span>
             </div>
             <div className="bar-track">
               <div className="bar-fill" style={{ width: `${percentage}%` }} />
@@ -1281,8 +1342,8 @@ function SalesBreakdownPanel({
                 aria-pressed={isActive}
               >
                 <div className="breakdown-row-main">
-                  <strong>{item.label}</strong>
-                  <span>{formatRowCount(item.documents)} docs · {formatRowCount(item.lines)} linhas</span>
+                  <SingleLineFitText className="breakdown-row-title">{item.label}</SingleLineFitText>
+                  <span className="breakdown-row-meta">{formatRowCount(item.documents)} docs · {formatRowCount(item.lines)} linhas</span>
                 </div>
                 <em>{formatAmount(item.value)}</em>
                 <div className="breakdown-meter" aria-hidden="true">
@@ -1384,13 +1445,40 @@ function RankingPagination({ ariaLabel = 'Paginação', loading, page, pageSize,
   const safePage = Math.min(Math.max(Number(page ?? 1), 1), safeTotalPages);
   const firstRow = totalRows > 0 ? (safePage - 1) * pageSize + 1 : 0;
   const lastRow = totalRows > 0 ? Math.min(safePage * pageSize, totalRows) : 0;
+  const [draftPage, setDraftPage] = useState(String(safePage));
+  const paginationId = useMemo(
+    () => `${ariaLabel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-page`,
+    [ariaLabel]
+  );
+
+  useEffect(() => {
+    setDraftPage(String(safePage));
+  }, [safePage]);
+
+  const submitPageJump = (event) => {
+    event.preventDefault();
+
+    const requestedPage = Number(draftPage);
+
+    if (!Number.isFinite(requestedPage)) {
+      setDraftPage(String(safePage));
+      return;
+    }
+
+    const nextPage = Math.min(Math.max(Math.trunc(requestedPage), 1), safeTotalPages);
+    setDraftPage(String(nextPage));
+
+    if (nextPage !== safePage) {
+      onPageChange(nextPage);
+    }
+  };
 
   return (
     <div className="ranking-pagination" aria-label={ariaLabel}>
       <span>
         {formatRowCount(firstRow)}-{formatRowCount(lastRow)} de {formatRowCount(totalRows)}
       </span>
-      <div>
+      <div className="pagination-actions">
         <button
           className="secondary-button compact"
           type="button"
@@ -1409,6 +1497,26 @@ function RankingPagination({ ariaLabel = 'Paginação', loading, page, pageSize,
           Seguinte
         </button>
       </div>
+      <form className="pagination-jump" onSubmit={submitPageJump}>
+        <label htmlFor={paginationId}>Página</label>
+        <input
+          id={paginationId}
+          type="number"
+          min="1"
+          max={safeTotalPages}
+          inputMode="numeric"
+          value={draftPage}
+          onChange={(event) => setDraftPage(event.target.value)}
+          disabled={loading || safeTotalPages <= 1}
+        />
+        <button
+          className="secondary-button compact"
+          type="submit"
+          disabled={loading || safeTotalPages <= 1}
+        >
+          Ir
+        </button>
+      </form>
     </div>
   );
 }

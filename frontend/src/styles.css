@@ -829,8 +829,8 @@ nav button:hover:not(.active) {
 
 .breakdown-row:hover .breakdown-row-main strong,
 .breakdown-row.active .breakdown-row-main strong,
-.breakdown-row:hover em,
-.breakdown-row.active em {
+.breakdown-row:hover > em,
+.breakdown-row.active > em {
   color: var(--accent-strong);
 }
 
@@ -880,12 +880,48 @@ nav button:hover:not(.active) {
   font-size: 12px;
 }
 
-.breakdown-row em {
+.breakdown-row > em {
   color: var(--text);
   font-size: 13px;
   font-style: normal;
   font-weight: 800;
   text-align: right;
+  white-space: nowrap;
+}
+
+.product-goal-row {
+  min-height: 86px;
+}
+
+.product-goal-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+  margin-top: 7px;
+}
+
+.product-goal-meta span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.product-goal-meta strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.product-goal-meta .product-goal-percent {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 900;
   white-space: nowrap;
 }
 
@@ -902,6 +938,14 @@ nav button:hover:not(.active) {
   height: 100%;
   background: var(--accent);
   border-radius: inherit;
+}
+
+.goal-meter {
+  height: 8px;
+}
+
+.goal-meter span {
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
 }
 
 .monthly-chart-panel {

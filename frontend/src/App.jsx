@@ -1325,10 +1325,13 @@ function SalesBreakdownPanel({
     label: item.label,
     documents: Number(item.documentCount ?? 0),
     lines: Number(item.lineCount ?? 0),
+    goalProgress: Number(item.goalProgress ?? 0),
+    netSales: Number(item.netSales ?? 0),
     productGoal: Number(item.productGoal ?? 0),
     value: Number(item.grossSales ?? 0)
   }));
   const maxValue = rows.reduce((max, item) => Math.max(max, Math.abs(item.value)), 0);
+  const isProductPanel = filterKey === 'productCode';
 
   return (
     <section className="detail-panel breakdown-panel">
@@ -1355,16 +1358,19 @@ function SalesBreakdownPanel({
         <div className="breakdown-list">
           {rows.map((item) => {
             const isActive = String(activeValue ?? '') === String(item.code ?? '');
-            const width = maxValue > 0 ? Math.max((Math.abs(item.value) / maxValue) * 100, 4) : 0;
-            const metaParts = [
-              `${formatRowCount(item.documents)} docs`,
-              `${formatRowCount(item.lines)} linhas`,
-              ...(item.productGoal > 0 ? [`Meta ${formatAmount(item.productGoal)}`] : [])
-            ];
+            const salesWidth = maxValue > 0 ? Math.max((Math.abs(item.value) / maxValue) * 100, 4) : 0;
+            const hasProductGoal = isProductPanel && item.productGoal > 0;
+            const goalWidth = hasProductGoal ? Math.min(Math.max(item.goalProgress, item.netSales > 0 ? 4 : 0), 100) : 0;
+            const width = isProductPanel ? goalWidth : salesWidth;
+            const rowClasses = [
+              'breakdown-row',
+              isProductPanel ? 'product-goal-row' : '',
+              isActive ? 'active' : ''
+            ].filter(Boolean).join(' ');
 
             return (
               <button
-                className={`breakdown-row ${isActive ? 'active' : ''}`}
+                className={rowClasses}
                 key={`${filterKey}-${item.code}`}
                 type="button"
                 onClick={() => onSelectFilter(filterKey, isActive ? '' : item.code)}
@@ -1372,10 +1378,31 @@ function SalesBreakdownPanel({
               >
                 <div className="breakdown-row-main">
                   <SingleLineFitText className="breakdown-row-title">{item.label}</SingleLineFitText>
-                  <span className="breakdown-row-meta">{metaParts.join(' · ')}</span>
+                  {isProductPanel ? (
+                    <>
+                      <span className="breakdown-row-meta">
+                        {formatRowCount(item.documents)} docs · {formatRowCount(item.lines)} linhas
+                      </span>
+                      <div className="product-goal-meta">
+                        <span>
+                          Meta
+                          <strong>{hasProductGoal ? formatAmount(item.productGoal) : 'Sem meta'}</strong>
+                        </span>
+                        <span>
+                          Realizado
+                          <strong>{formatAmount(item.netSales)}</strong>
+                        </span>
+                        {hasProductGoal ? <strong className="product-goal-percent">{formatPercentage(item.goalProgress)}</strong> : null}
+                      </div>
+                    </>
+                  ) : (
+                    <span className="breakdown-row-meta">
+                      {formatRowCount(item.documents)} docs · {formatRowCount(item.lines)} linhas
+                    </span>
+                  )}
                 </div>
                 <em>{formatAmount(item.value)}</em>
-                <div className="breakdown-meter" aria-hidden="true">
+                <div className={`breakdown-meter ${isProductPanel ? 'goal-meter' : ''}`} aria-hidden="true">
                   <span style={{ width: `${width}%` }} />
                 </div>
               </button>

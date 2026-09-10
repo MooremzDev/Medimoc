@@ -692,12 +692,13 @@ nav button:hover:not(.active) {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(280px, 0.8fr);
   gap: 18px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .sales-main-grid .monthly-chart-panel,
 .sales-main-grid .vendas-trend-panel,
 .sales-main-grid .goal-card {
+  align-self: start;
   height: auto;
   min-height: 0;
   overflow: hidden;
@@ -1249,13 +1250,44 @@ nav button:hover:not(.active) {
 }
 
 .goal-card-content {
+  display: grid;
+  gap: 4px;
   min-width: 0;
   flex: 1;
 }
 
+.goal-card h2 {
+  line-height: 1;
+}
+
+.goal-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.goal-card-metrics span {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.goal-card-metrics strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+  text-transform: none;
+}
+
 .goal-progress {
   height: 7px;
-  margin-top: 12px;
+  margin-top: 4px;
   overflow: hidden;
   background: #eee5e5;
   border-radius: 99px;
@@ -1270,7 +1302,7 @@ nav button:hover:not(.active) {
 }
 
 .goal-status {
-  margin: 8px 0 0;
+  margin: 2px 0 0;
   color: var(--accent-strong);
   font-size: 12px;
   font-weight: 800;

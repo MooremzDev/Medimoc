@@ -121,6 +121,22 @@ const buildBreakdownSelect = (codeColumn, labelColumn) => `
   ORDER BY grossSales DESC, label
 `;
 
+const buildProductBreakdownSelect = () => `
+  SELECT TOP (@breakdownLimit)
+    productCode AS code,
+    productName AS label,
+    ${metricSelect},
+    MAX(productGoal) AS productGoal,
+    CASE
+      WHEN MAX(productGoal) > 0
+        THEN (COALESCE(SUM(netSales), 0) / NULLIF(MAX(productGoal), 0)) * 100
+      ELSE NULL
+    END AS goalProgress
+  FROM #vendasBase
+  GROUP BY productCode, productName
+  ORDER BY grossSales DESC, label
+`;
+
 const buildOptionSelect = (codeColumn, labelColumn) => `
   SELECT TOP (@optionLimit)
     ${codeColumn} AS value,
@@ -137,7 +153,8 @@ const rankingDimensions = {
   },
   products: {
     codeColumn: 'productCode',
-    labelColumn: 'productName'
+    labelColumn: 'productName',
+    includeGoal: true
   },
   brands: {
     codeColumn: 'brandCode',
@@ -160,6 +177,7 @@ const buildVendasBaseTempTableQuery = (documentTypeWhere) => `
     COALESCE(NULLIF(Cl.Distrito, ''), 'Sem provincia') AS provinceName,
     A.Artigo AS productCode,
     COALESCE(NULLIF(A.Descricao, ''), A.Artigo, 'Sem artigo') AS productName,
+    COALESCE(TRY_CONVERT(decimal(28, 4), A.CDU_Meta), 0) AS productGoal,
     F.Familia AS familyCode,
     COALESCE(NULLIF(F.Descricao, ''), F.Familia, 'Sem familia') AS familyName,
     COALESCE(NULLIF(A.Marca, ''), 'SEM_MARCA') AS brandCode,
@@ -191,12 +209,28 @@ const buildVendasBaseTempTableQuery = (documentTypeWhere) => `
     AND (@province IS NULL OR COALESCE(NULLIF(Cl.Distrito, ''), 'SEM_PROVINCIA') = @province);
 `;
 
-const buildRankingSelect = ({ codeColumn, labelColumn }) => `
+const buildMonthlyGoalSelect = () => `
+  SELECT
+    COALESCE(SUM(TRY_CONVERT(decimal(28, 4), A.CDU_Meta)), 0) AS monthlyGoal
+  FROM ${tables.artigos} A
+  WHERE (@familyCode IS NULL OR A.Familia = @familyCode)
+    AND (@productCode IS NULL OR A.Artigo = @productCode)
+    AND (@brandCode IS NULL OR COALESCE(NULLIF(A.Marca, ''), 'SEM_MARCA') = @brandCode)
+`;
+
+const buildRankingSelect = ({ codeColumn, labelColumn, includeGoal = false }) => `
   WITH rankingRows AS (
     SELECT
       ${codeColumn} AS code,
       ${labelColumn} AS label,
       ${metricSelect}
+      ${includeGoal ? `,
+      MAX(productGoal) AS productGoal,
+      CASE
+        WHEN MAX(productGoal) > 0
+          THEN (COALESCE(SUM(netSales), 0) / NULLIF(MAX(productGoal), 0)) * 100
+        ELSE NULL
+      END AS goalProgress` : ''}
     FROM #vendasBase
     GROUP BY ${codeColumn}, ${labelColumn}
   )
@@ -208,6 +242,13 @@ const buildRankingSelect = ({ codeColumn, labelColumn }) => `
       ${codeColumn} AS code,
       ${labelColumn} AS label,
       ${metricSelect}
+      ${includeGoal ? `,
+      MAX(productGoal) AS productGoal,
+      CASE
+        WHEN MAX(productGoal) > 0
+          THEN (COALESCE(SUM(netSales), 0) / NULLIF(MAX(productGoal), 0)) * 100
+        ELSE NULL
+      END AS goalProgress` : ''}
     FROM #vendasBase
     GROUP BY ${codeColumn}, ${labelColumn}
   ),
@@ -222,6 +263,9 @@ const buildRankingSelect = ({ codeColumn, labelColumn }) => `
       netSales,
       vatTotal,
       grossSales
+      ${includeGoal ? `,
+      productGoal,
+      goalProgress` : ''}
     FROM rankingRows
   )
   SELECT
@@ -234,6 +278,9 @@ const buildRankingSelect = ({ codeColumn, labelColumn }) => `
     netSales,
     vatTotal,
     grossSales
+    ${includeGoal ? `,
+    productGoal,
+    goalProgress` : ''}
   FROM rankedRows
   WHERE rank > @offset AND rank <= (@offset + @pageSize)
   ORDER BY rank;
@@ -257,11 +304,13 @@ class VendasService {
         ${metricSelect}
       FROM #vendasBase;
 
+      ${buildMonthlyGoalSelect()}
+
       ${buildTrendSelect(params.period)}
 
       ${buildBreakdownSelect('familyCode', 'familyName')}
 
-      ${buildBreakdownSelect('productCode', 'productName')}
+      ${buildProductBreakdownSelect()}
 
       ${buildBreakdownSelect('vendorCode', 'vendorName')}
 
@@ -304,20 +353,21 @@ class VendasService {
         vatTotal: 0,
         grossSales: 0
       },
-      trend: recordsets[1] ?? [],
+      monthlyGoal: recordsets[1]?.[0]?.monthlyGoal ?? 0,
+      trend: recordsets[2] ?? [],
       breakdowns: {
-        families: recordsets[2] ?? [],
-        products: recordsets[3] ?? [],
-        vendors: recordsets[4] ?? [],
-        brands: recordsets[5] ?? [],
-        provinces: recordsets[6] ?? []
+        families: recordsets[3] ?? [],
+        products: recordsets[4] ?? [],
+        vendors: recordsets[5] ?? [],
+        brands: recordsets[6] ?? [],
+        provinces: recordsets[7] ?? []
       },
       filterOptions: {
-        families: recordsets[7] ?? [],
-        products: recordsets[8] ?? [],
-        vendors: recordsets[9] ?? [],
-        brands: recordsets[10] ?? [],
-        provinces: recordsets[11] ?? []
+        families: recordsets[8] ?? [],
+        products: recordsets[9] ?? [],
+        vendors: recordsets[10] ?? [],
+        brands: recordsets[11] ?? [],
+        provinces: recordsets[12] ?? []
       },
       sourceTables: tables
     };

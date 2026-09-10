@@ -3,6 +3,7 @@ import { env } from '../config/env.js';
 import { databaseService } from './database.service.js';
 
 const quoteIdentifier = (identifier) => `[${identifier.replace(/]/g, ']]')}]`;
+const artigosTable = `${quoteIdentifier(env.primaveraSchema)}.${quoteIdentifier('Artigo')}`;
 const cabecDocTable = `${quoteIdentifier(env.primaveraSchema)}.${quoteIdentifier('CabecDoc')}`;
 const vendedoresTable = `${quoteIdentifier(env.primaveraSchema)}.${quoteIdentifier('Vendedores')}`;
 const vendorDocumentTypes = env.salesDocumentTypes;
@@ -94,7 +95,7 @@ class DashboardService {
 
     const vendorWhere = `WHERE ${vendorWhereClauses.join(' AND ')}`;
 
-    const [summaryResult, typeResult, vendorResult, monthlyResult, recentResult] = await Promise.all([
+    const [summaryResult, typeResult, vendorResult, monthlyResult, recentResult, goalResult] = await Promise.all([
       addDashboardInputs(pool.request(), filters).query(`
         SELECT
           COUNT(*) AS documentCount,
@@ -171,6 +172,11 @@ class DashboardService {
           FROM ${cabecDocTable}
           ${salesWhere}
           ORDER BY Data DESC, NumDoc DESC
+        `),
+      pool.request().query(`
+          SELECT
+            COALESCE(SUM(TRY_CONVERT(decimal(28, 4), CDU_Meta)), 0) AS monthlyGoal
+          FROM ${artigosTable}
         `)
     ]);
 
@@ -193,6 +199,7 @@ class DashboardService {
       byDocumentType: typeResult.recordset ?? [],
       byVendor: vendorResult.recordset ?? [],
       byMonth: monthlyResult.recordset ?? [],
+      monthlyGoal: goalResult.recordset?.[0]?.monthlyGoal ?? 0,
       recentDocuments: recentResult.recordset ?? []
     };
   }

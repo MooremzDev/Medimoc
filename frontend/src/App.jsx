@@ -51,7 +51,6 @@ import {
 
 const defaultQuery = 'SELECT TOP (@limit) * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = @tableType';
 const defaultParameters = JSON.stringify({ limit: 20, tableType: 'BASE TABLE' }, null, 2);
-const monthlySalesGoal = 3_200_189;
 const defaultSalesDateRange = getCurrentMonthRange();
 const defaultVendasFilters = {
   familyCode: '',
@@ -262,9 +261,12 @@ function SingleLineFitText({ children, className = '', maxSize = 14, minSize = 8
   );
 }
 
-function MonthlyGoalCard({ actualSales, hasResult, loading, periodLabel }) {
+function MonthlyGoalCard({ actualSales, goal, hasResult, loading }) {
   const sales = Number(actualSales ?? 0);
-  const progress = Math.max(0, (sales / monthlySalesGoal) * 100);
+  const target = Number(goal ?? 0);
+  const hasGoal = target > 0;
+  const progress = hasGoal ? Math.max(0, (sales / target) * 100) : 0;
+  const remaining = Math.max(target - sales, 0);
 
   return (
     <section className="status-card goal-card">
@@ -273,13 +275,18 @@ function MonthlyGoalCard({ actualSales, hasResult, loading, periodLabel }) {
       </div>
       <div className="goal-card-content">
         <p className="eyebrow">Meta mensal</p>
-        <h2>{loading ? 'A carregar' : hasResult ? formatPercentage(progress) : 'Sem dados'}</h2>
-        <p className="muted">
-          {hasResult
-            ? `${formatAmount(sales)} em ${periodLabel} de ${formatAmount(monthlySalesGoal)}`
-            : `Meta: ${formatAmount(monthlySalesGoal)}`}
-        </p>
-        {hasResult ? (
+        <h2>{loading ? 'A carregar' : hasResult && hasGoal ? formatPercentage(progress) : 'Sem meta'}</h2>
+        <div className="goal-card-metrics">
+          <span>
+            Realizado
+            <strong>{hasResult ? formatAmount(sales) : 'Sem dados'}</strong>
+          </span>
+          <span>
+            Meta
+            <strong>{hasGoal ? formatAmount(target) : 'Sem dados'}</strong>
+          </span>
+        </div>
+        {hasResult && hasGoal ? (
           <>
             <div
               className="goal-progress"
@@ -292,7 +299,7 @@ function MonthlyGoalCard({ actualSales, hasResult, loading, periodLabel }) {
               <span style={{ width: `${Math.min(progress, 100)}%` }} />
             </div>
             <p className="goal-status">
-              {progress >= 100 ? 'Meta atingida' : `Faltam ${formatAmount(monthlySalesGoal - sales)}`}
+              {progress >= 100 ? 'Meta atingida' : `Faltam ${formatAmount(remaining)}`}
             </p>
           </>
         ) : null}
@@ -734,7 +741,7 @@ function formatDateRangeLabel(dateRange) {
 }
 
 function getSelectedMonthFromRange(dateRange) {
-  return getMonthStart(parseDateInput(dateRange?.startDate) ?? parseDateInput(dateRange?.endDate) ?? new Date());
+  return getMonthStart(parseDateInput(dateRange?.endDate) ?? parseDateInput(dateRange?.startDate) ?? new Date());
 }
 
 function getComparisonMonthDates(dateRange, referenceDate = new Date()) {
@@ -787,15 +794,17 @@ function formatCompactAmount(value) {
   }).format(value ?? 0);
 }
 
-function MonthlySalesLineChart({ activeMonth, goal = monthlySalesGoal, items, loading }) {
+function MonthlySalesLineChart({ activeMonth, goal = 0, items, loading }) {
   const monthlySales = (items ?? []).map((item) => ({
     month: item.month,
     documents: Number(item.documentCount ?? 0),
     value: Number(item.netSales ?? 0)
   }));
+  const target = Number(goal ?? 0);
+  const hasGoal = target > 0;
   const activeMonthSales = monthlySales.find((item) => item.month === activeMonth) ?? monthlySales.at(-1) ?? null;
   const activeMonthValue = Number(activeMonthSales?.value ?? 0);
-  const goalGap = activeMonthValue - goal;
+  const goalGap = activeMonthValue - target;
 
   if (loading) {
     return (
@@ -832,7 +841,7 @@ function MonthlySalesLineChart({ activeMonth, goal = monthlySalesGoal, items, lo
   const padding = { top: 28, right: 30, bottom: 50, left: 76 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
-  const values = [...monthlySales.map((item) => item.value), goal];
+  const values = [...monthlySales.map((item) => item.value), ...(hasGoal ? [target] : [])];
   const rawMaxValue = Math.max(...values, 0);
   const rawMinValue = Math.min(...values, 0);
   const maxValue = rawMaxValue > 0 ? rawMaxValue * 1.08 : 1;
@@ -852,7 +861,7 @@ function MonthlySalesLineChart({ activeMonth, goal = monthlySalesGoal, items, lo
   const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
   const baseline = yForValue(0);
   const areaPath = `${linePath} L ${points.at(-1).x} ${baseline} L ${points[0].x} ${baseline} Z`;
-  const goalY = yForValue(goal);
+  const goalY = yForValue(target);
   const gridValues = Array.from({ length: 4 }, (_value, index) => (
     maxValue - (valueRange * index) / 3
   ));
@@ -869,13 +878,19 @@ function MonthlySalesLineChart({ activeMonth, goal = monthlySalesGoal, items, lo
             <i className="chart-legend-dot actual" aria-hidden="true" />
             Vendas do mês: <strong>{formatAmount(activeMonthValue)}</strong>
           </span>
-          <span>
-            <i className="chart-legend-dot target" aria-hidden="true" />
-            Meta: <strong>{formatAmount(goal)}</strong>
-          </span>
-          <span className={goalGap >= 0 ? 'positive' : 'negative'}>
-            {goalGap >= 0 ? 'Acima' : 'Falta'}: <strong>{formatAmount(Math.abs(goalGap))}</strong>
-          </span>
+          {hasGoal ? (
+            <>
+              <span>
+                <i className="chart-legend-dot target" aria-hidden="true" />
+                Meta: <strong>{formatAmount(target)}</strong>
+              </span>
+              <span className={goalGap >= 0 ? 'positive' : 'negative'}>
+                {goalGap >= 0 ? 'Acima' : 'Falta'}: <strong>{formatAmount(Math.abs(goalGap))}</strong>
+              </span>
+            </>
+          ) : (
+            <span>Meta: <strong>Sem dados</strong></span>
+          )}
         </div>
       </div>
 
@@ -902,21 +917,29 @@ function MonthlySalesLineChart({ activeMonth, goal = monthlySalesGoal, items, lo
           })}
 
           <path className="line-chart-area" d={areaPath} />
-          <line
-            className="line-chart-goal"
-            x1={padding.left}
-            x2={width - padding.right}
-            y1={goalY}
-            y2={goalY}
-          />
-          <text className="line-chart-goal-label" x={width - padding.right - 8} y={Math.max(goalY - 10, padding.top + 12)} textAnchor="end">
-            Meta {formatCompactAmount(goal)}
-          </text>
+          {hasGoal ? (
+            <>
+              <line
+                className="line-chart-goal"
+                x1={padding.left}
+                x2={width - padding.right}
+                y1={goalY}
+                y2={goalY}
+              />
+              <text className="line-chart-goal-label" x={width - padding.right - 8} y={Math.max(goalY - 10, padding.top + 12)} textAnchor="end">
+                Meta {formatCompactAmount(target)}
+              </text>
+            </>
+          ) : null}
           <path className="line-chart-line" d={linePath} />
 
           {points.map((point) => (
             <g className="line-chart-point" key={point.month}>
-              <title>{`${formatMonthLabel(point.month)}: ${formatAmount(point.value)} de ${formatAmount(goal)} (${point.documents} documentos)`}</title>
+              <title>
+                {hasGoal
+                  ? `${formatMonthLabel(point.month)}: ${formatAmount(point.value)} de ${formatAmount(target)} (${point.documents} documentos)`
+                  : `${formatMonthLabel(point.month)}: ${formatAmount(point.value)} (${point.documents} documentos)`}
+              </title>
               <circle cx={point.x} cy={point.y} r="5" />
               <text className="line-chart-point-value" x={point.x} y={Math.max(point.y - 13, padding.top + 14)} textAnchor="middle">
                 {formatCompactAmount(point.value)}
@@ -1302,6 +1325,7 @@ function SalesBreakdownPanel({
     label: item.label,
     documents: Number(item.documentCount ?? 0),
     lines: Number(item.lineCount ?? 0),
+    productGoal: Number(item.productGoal ?? 0),
     value: Number(item.grossSales ?? 0)
   }));
   const maxValue = rows.reduce((max, item) => Math.max(max, Math.abs(item.value)), 0);
@@ -1332,6 +1356,11 @@ function SalesBreakdownPanel({
           {rows.map((item) => {
             const isActive = String(activeValue ?? '') === String(item.code ?? '');
             const width = maxValue > 0 ? Math.max((Math.abs(item.value) / maxValue) * 100, 4) : 0;
+            const metaParts = [
+              `${formatRowCount(item.documents)} docs`,
+              `${formatRowCount(item.lines)} linhas`,
+              ...(item.productGoal > 0 ? [`Meta ${formatAmount(item.productGoal)}`] : [])
+            ];
 
             return (
               <button
@@ -1343,7 +1372,7 @@ function SalesBreakdownPanel({
               >
                 <div className="breakdown-row-main">
                   <SingleLineFitText className="breakdown-row-title">{item.label}</SingleLineFitText>
-                  <span className="breakdown-row-meta">{formatRowCount(item.documents)} docs · {formatRowCount(item.lines)} linhas</span>
+                  <span className="breakdown-row-meta">{metaParts.join(' · ')}</span>
                 </div>
                 <em>{formatAmount(item.value)}</em>
                 <div className="breakdown-meter" aria-hidden="true">
@@ -1385,6 +1414,7 @@ function VendasSubmenu({ activeView, loading, onSelectView }) {
 
 function VendasRankingTable({ dimension, loading, rows }) {
   const entityLabel = vendasRankingEntityLabels[dimension] ?? 'Item';
+  const showProductGoal = dimension === 'products';
 
   if (loading) {
     return (
@@ -1418,22 +1448,31 @@ function VendasRankingTable({ dimension, loading, rows }) {
             <th>Vendas sem IVA</th>
             <th>IVA</th>
             <th>Vendas com IVA</th>
+            {showProductGoal ? <th>Meta mensal</th> : null}
+            {showProductGoal ? <th>% meta</th> : null}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={`${dimension}-${row.rank}-${row.code}`}>
-              <td>{formatRowCount(row.rank)}</td>
-              <td>{row.label}</td>
-              <td>{row.code}</td>
-              <td>{formatRowCount(row.documentCount)}</td>
-              <td>{formatRowCount(row.lineCount)}</td>
-              <td>{formatAmount(row.quantity)}</td>
-              <td>{formatAmount(row.netSales)}</td>
-              <td>{formatAmount(row.vatTotal)}</td>
-              <td>{formatAmount(row.grossSales)}</td>
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const productGoal = Number(row.productGoal ?? 0);
+            const goalProgress = Number(row.goalProgress ?? 0);
+
+            return (
+              <tr key={`${dimension}-${row.rank}-${row.code}`}>
+                <td>{formatRowCount(row.rank)}</td>
+                <td>{row.label}</td>
+                <td>{row.code}</td>
+                <td>{formatRowCount(row.documentCount)}</td>
+                <td>{formatRowCount(row.lineCount)}</td>
+                <td>{formatAmount(row.quantity)}</td>
+                <td>{formatAmount(row.netSales)}</td>
+                <td>{formatAmount(row.vatTotal)}</td>
+                <td>{formatAmount(row.grossSales)}</td>
+                {showProductGoal ? <td>{productGoal > 0 ? formatAmount(productGoal) : 'Sem meta'}</td> : null}
+                {showProductGoal ? <td>{productGoal > 0 ? formatPercentage(goalProgress) : '-'}</td> : null}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -1588,6 +1627,7 @@ function SalesPage({
   const netSales = Number(summary?.netSales ?? 0);
   const grossSales = Number(summary?.grossSales ?? 0);
   const vatTotal = Number(summary?.vatTotal ?? 0);
+  const monthlyGoal = Number(salesDashboard.data?.monthlyGoal ?? 0);
   const averageDocumentValue = documentCount > 0 ? grossSales / documentCount : 0;
   const hasResult = Boolean(salesDashboard.data);
   const rankingDimension = activeView === 'summary' ? 'vendors' : activeView;
@@ -1666,9 +1706,9 @@ function SalesPage({
             />
             <MonthlyGoalCard
               actualSales={summary?.netSales}
+              goal={monthlyGoal}
               hasResult={hasResult}
               loading={salesDashboard.loading}
-              periodLabel={activePeriodLabel}
             />
           </div>
 
@@ -1941,6 +1981,13 @@ export default function App() {
   );
   const generalSalesComparisonMonths =
     generalSalesDashboard.data?.comparisonMonths ?? generalSalesDashboard.data?.byMonth ?? [];
+  const generalActiveMonth = getMonthKey(getSelectedMonthFromRange(generalActiveSalesDateRange));
+  const generalMonthlyGoal = Number(generalSalesDashboard.data?.monthlyGoal ?? 0);
+  const generalActiveMonthSales = useMemo(() => {
+    const activeMonthRow = generalSalesComparisonMonths.find((item) => item.month === generalActiveMonth);
+
+    return Number(activeMonthRow?.netSales ?? 0);
+  }, [generalActiveMonth, generalSalesComparisonMonths]);
   const generalVisibleRecentDocuments = generalSelectedVendor
     ? generalVendorDocuments.rows
     : generalSalesDashboard.data?.recentDocuments ?? [];
@@ -2537,15 +2584,16 @@ export default function App() {
                   : 'Sem documentos disponíveis no período'}
               />
               <MonthlyGoalCard
-                actualSales={generalSalesSummary?.netSales}
+                actualSales={generalActiveMonthSales}
+                goal={generalMonthlyGoal}
                 hasResult={Boolean(generalSalesDashboard.data)}
                 loading={generalSalesDashboard.loading}
-                periodLabel={generalActivePeriodLabel}
               />
             </div>
 
             <MonthlySalesLineChart
-              activeMonth={getMonthKey(getSelectedMonthFromRange(generalActiveSalesDateRange))}
+              activeMonth={generalActiveMonth}
+              goal={generalMonthlyGoal}
               items={generalSalesComparisonMonths}
               loading={generalSalesDashboard.loading}
             />

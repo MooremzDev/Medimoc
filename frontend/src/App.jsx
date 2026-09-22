@@ -279,11 +279,15 @@ function MonthlyGoalCard({ actualSales, goal, hasResult, loading }) {
         <div className="goal-card-metrics">
           <span>
             Realizado
-            <strong>{hasResult ? formatAmount(sales) : 'Sem dados'}</strong>
+            <SingleLineFitText className="goal-metric-value" maxSize={13} minSize={9}>
+              {hasResult ? formatAmount(sales) : 'Sem dados'}
+            </SingleLineFitText>
           </span>
           <span>
             Meta
-            <strong>{hasGoal ? formatAmount(target) : 'Sem dados'}</strong>
+            <SingleLineFitText className="goal-metric-value" maxSize={13} minSize={9}>
+              {hasGoal ? formatAmount(target) : 'Sem dados'}
+            </SingleLineFitText>
           </span>
         </div>
         {hasResult && hasGoal ? (
@@ -298,9 +302,9 @@ function MonthlyGoalCard({ actualSales, goal, hasResult, loading }) {
             >
               <span style={{ width: `${Math.min(progress, 100)}%` }} />
             </div>
-            <p className="goal-status">
+            <SingleLineFitText className="goal-status" maxSize={12} minSize={9}>
               {progress >= 100 ? 'Meta atingida' : `Faltam ${formatAmount(remaining)}`}
-            </p>
+            </SingleLineFitText>
           </>
         ) : null}
       </div>
@@ -639,7 +643,7 @@ function VendorBarChart({ items, onSelectVendor, selectedVendorCode }) {
       code: item.vendorCode,
       name: item.vendorName,
       documents: Number(item.documentCount ?? 0),
-      value: Number(item.grossSales ?? 0)
+      value: Number(item.netSales ?? 0)
     }))
     .filter((item) => item.value > 0)
     .sort((a, b) => b.value - a.value);
@@ -1328,7 +1332,7 @@ function SalesBreakdownPanel({
     goalProgress: Number(item.goalProgress ?? 0),
     netSales: Number(item.netSales ?? 0),
     productGoal: Number(item.productGoal ?? 0),
-    value: Number(item.grossSales ?? 0)
+    value: Number(item.netSales ?? 0)
   }));
   const maxValue = rows.reduce((max, item) => Math.max(max, Math.abs(item.value)), 0);
   const isProductPanel = filterKey === 'productCode';
@@ -1700,14 +1704,14 @@ function SalesPage({
               label="Vendas sem IVA"
               value={salesDashboard.loading ? 'A carregar' : formatAmount(netSales)}
               tone="success"
-              detail={hasResult ? `Total líquido em ${activePeriodLabel}` : 'Sem vendas disponíveis no período'}
+              detail={hasResult ? `Mercadoria menos desconto em ${activePeriodLabel}` : 'Sem vendas disponíveis no período'}
             />
             <StatusCard
               icon={ReceiptText}
               label="Vendas com IVA"
               value={salesDashboard.loading ? 'A carregar' : formatAmount(grossSales)}
               tone="neutral"
-              detail={hasResult ? `Valor bruto em ${activePeriodLabel}` : 'Sem vendas disponíveis no período'}
+              detail={hasResult ? `Total do documento em ${activePeriodLabel}` : 'Sem vendas disponíveis no período'}
             />
             <StatusCard
               icon={Percent}
@@ -2589,12 +2593,21 @@ export default function App() {
 
             <div className="metric-grid">
               <StatusCard
-                icon={Database}
-                label="Vendas"
+                icon={Banknote}
+                label="Vendas sem IVA"
                 value={generalSalesDashboard.loading ? 'A carregar' : formatAmount(generalSalesSummary?.netSales)}
                 tone="success"
                 detail={generalSalesDashboard.data
-                  ? `Total de vendas no período ${generalActivePeriodLabel}`
+                  ? `Mercadoria menos desconto em ${generalActivePeriodLabel}`
+                  : 'Sem vendas disponíveis no período'}
+              />
+              <StatusCard
+                icon={ReceiptText}
+                label="Vendas com IVA"
+                value={generalSalesDashboard.loading ? 'A carregar' : formatAmount(generalSalesSummary?.grossSales)}
+                tone="neutral"
+                detail={generalSalesDashboard.data
+                  ? `Total dos documentos em ${generalActivePeriodLabel}`
                   : 'Sem vendas disponíveis no período'}
               />
               <StatusCard

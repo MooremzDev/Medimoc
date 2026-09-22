@@ -7,6 +7,7 @@ const qualifiedTable = (tableName) => `${quoteIdentifier(env.primaveraSchema)}.$
 
 const tables = {
   artigos: qualifiedTable('Artigo'),
+  artigoMoeda: qualifiedTable('ArtigoMoeda'),
   cabecDoc: qualifiedTable('CabecDoc'),
   clientes: qualifiedTable('Clientes'),
   familias: qualifiedTable('Familias'),
@@ -78,13 +79,22 @@ const metricSelect = `
   COALESCE(SUM(grossSales), 0) AS grossSales
 `;
 
+const documentMetricSelect = `
+  COUNT(*) AS documentCount,
+  COALESCE(SUM(lineCount), 0) AS lineCount,
+  COALESCE(SUM(quantity), 0) AS quantity,
+  COALESCE(SUM(netSales), 0) AS netSales,
+  COALESCE(SUM(vatTotal), 0) AS vatTotal,
+  COALESCE(SUM(grossSales), 0) AS grossSales
+`;
+
 const buildTrendSelect = (period) => {
   if (period === 'day') {
     return `
       SELECT
         RIGHT('0' + CONVERT(varchar(2), DATEPART(hour, documentDate)), 2) + ':00' AS label,
-        ${metricSelect}
-      FROM #vendasBase
+        ${documentMetricSelect}
+      FROM #vendasDocuments
       GROUP BY DATEPART(hour, documentDate)
       ORDER BY DATEPART(hour, documentDate)
     `;
@@ -94,8 +104,8 @@ const buildTrendSelect = (period) => {
     return `
       SELECT
         CONVERT(char(7), DATEADD(month, DATEDIFF(month, 0, documentDate), 0), 126) AS label,
-        ${metricSelect}
-      FROM #vendasBase
+        ${documentMetricSelect}
+      FROM #vendasDocuments
       GROUP BY DATEADD(month, DATEDIFF(month, 0, documentDate), 0)
       ORDER BY DATEADD(month, DATEDIFF(month, 0, documentDate), 0)
     `;
@@ -104,8 +114,8 @@ const buildTrendSelect = (period) => {
   return `
     SELECT
       CONVERT(char(10), CAST(documentDate AS date), 126) AS label,
-      ${metricSelect}
-    FROM #vendasBase
+      ${documentMetricSelect}
+    FROM #vendasDocuments
     GROUP BY CAST(documentDate AS date)
     ORDER BY CAST(documentDate AS date)
   `;
@@ -118,7 +128,7 @@ const buildBreakdownSelect = (codeColumn, labelColumn) => `
     ${metricSelect}
   FROM #vendasBase
   GROUP BY ${codeColumn}, ${labelColumn}
-  ORDER BY grossSales DESC, label
+  ORDER BY netSales DESC, label
 `;
 
 const buildProductBreakdownSelect = () => `
@@ -134,7 +144,7 @@ const buildProductBreakdownSelect = () => `
     END AS goalProgress
   FROM #vendasBase
   GROUP BY productCode, productName
-  ORDER BY grossSales DESC, label
+  ORDER BY netSales DESC, label
 `;
 
 const buildOptionSelect = (codeColumn, labelColumn) => `
@@ -177,7 +187,11 @@ const buildVendasBaseTempTableQuery = (documentTypeWhere) => `
     COALESCE(NULLIF(Cl.Distrito, ''), 'Sem provincia') AS provinceName,
     A.Artigo AS productCode,
     COALESCE(NULLIF(A.Descricao, ''), A.Artigo, 'Sem artigo') AS productName,
-    COALESCE(TRY_CONVERT(decimal(28, 4), A.CDU_Meta), 0) AS productGoal,
+    CASE
+      WHEN A.CDU_Meta IS NOT NULL
+        THEN TRY_CONVERT(decimal(28, 4), A.CDU_Meta) * COALESCE(articlePrice.PVP1, 0)
+      ELSE NULL
+    END AS productGoal,
     F.Familia AS familyCode,
     COALESCE(NULLIF(F.Descricao, ''), F.Familia, 'Sem familia') AS familyName,
     COALESCE(NULLIF(A.Marca, ''), 'SEM_MARCA') AS brandCode,
@@ -185,15 +199,32 @@ const buildVendasBaseTempTableQuery = (documentTypeWhere) => `
     COALESCE(NULLIF(vendorSource.vendorCode, ''), 'SEM_VENDEDOR') AS vendorCode,
     COALESCE(NULLIF(V.Nome, ''), NULLIF(vendorSource.vendorCode, ''), 'Sem vendedor') AS vendorName,
     COALESCE(L.Quantidade, 0) AS quantity,
-    COALESCE(L.TotalIliquido, L.PrecoLiquido, 0) AS netSales,
+    COALESCE(C.TotalMerc, 0) - COALESCE(C.TotalDesc, 0) AS documentNetSales,
+    COALESCE(C.TotalIva, 0) AS documentVatTotal,
+    COALESCE(C.TotalDocumento, 0) AS documentGrossSales,
+    COALESCE(L.PrecoLiquido, 0) AS netSales,
     COALESCE(L.TotalIva, 0) AS vatTotal,
-    COALESCE(L.TotalIliquido, L.PrecoLiquido, 0) + COALESCE(L.TotalIva, 0) AS grossSales
+    COALESCE(L.PrecoLiquido, 0) + COALESCE(L.TotalIva, 0) AS grossSales
   INTO #vendasBase
   FROM ${tables.cabecDoc} C
   INNER JOIN ${tables.clientes} Cl ON C.Entidade = Cl.Cliente
   INNER JOIN ${tables.linhasDoc} L ON C.Id = L.IdCabecDoc
   INNER JOIN ${tables.artigos} A ON L.Artigo = A.Artigo
   INNER JOIN ${tables.familias} F ON F.Familia = A.Familia
+  OUTER APPLY (
+    SELECT TOP (1)
+      COALESCE(TRY_CONVERT(decimal(28, 4), AM.PVP1), 0) AS PVP1
+    FROM ${tables.artigoMoeda} AM
+    WHERE AM.Artigo = A.Artigo
+      AND AM.Moeda = 'MT'
+    ORDER BY
+      CASE
+        WHEN AM.Unidade = A.UnidadeVenda THEN 0
+        WHEN AM.Unidade = A.UnidadeBase THEN 1
+        ELSE 2
+      END,
+      AM.Unidade
+  ) articlePrice
   OUTER APPLY (
     SELECT COALESCE(NULLIF(L.Vendedor, ''), NULLIF(C.RespCobranca, ''), NULLIF(Cl.Vendedor, '')) AS vendorCode
   ) vendorSource
@@ -207,13 +238,46 @@ const buildVendasBaseTempTableQuery = (documentTypeWhere) => `
     AND (@vendorCode IS NULL OR COALESCE(NULLIF(vendorSource.vendorCode, ''), 'SEM_VENDEDOR') = @vendorCode)
     AND (@brandCode IS NULL OR COALESCE(NULLIF(A.Marca, ''), 'SEM_MARCA') = @brandCode)
     AND (@province IS NULL OR COALESCE(NULLIF(Cl.Distrito, ''), 'SEM_PROVINCIA') = @province);
+
+  IF OBJECT_ID('tempdb..#vendasDocuments') IS NOT NULL
+    DROP TABLE #vendasDocuments;
+
+  SELECT
+    documentId,
+    MAX(documentDate) AS documentDate,
+    COUNT(*) AS lineCount,
+    COALESCE(SUM(quantity), 0) AS quantity,
+    MAX(documentNetSales) AS netSales,
+    MAX(documentVatTotal) AS vatTotal,
+    MAX(documentGrossSales) AS grossSales
+  INTO #vendasDocuments
+  FROM #vendasBase
+  GROUP BY documentId;
 `;
 
 const buildMonthlyGoalSelect = () => `
   SELECT
-    COALESCE(SUM(TRY_CONVERT(decimal(28, 4), A.CDU_Meta)), 0) AS monthlyGoal
+    COALESCE(SUM(
+      COALESCE(TRY_CONVERT(decimal(28, 4), A.CDU_Meta), 0)
+        * COALESCE(articlePrice.PVP1, 0)
+    ), 0) AS monthlyGoal
   FROM ${tables.artigos} A
-  WHERE (@familyCode IS NULL OR A.Familia = @familyCode)
+  OUTER APPLY (
+    SELECT TOP (1)
+      COALESCE(TRY_CONVERT(decimal(28, 4), AM.PVP1), 0) AS PVP1
+    FROM ${tables.artigoMoeda} AM
+    WHERE AM.Artigo = A.Artigo
+      AND AM.Moeda = 'MT'
+    ORDER BY
+      CASE
+        WHEN AM.Unidade = A.UnidadeVenda THEN 0
+        WHEN AM.Unidade = A.UnidadeBase THEN 1
+        ELSE 2
+      END,
+      AM.Unidade
+  ) articlePrice
+  WHERE A.CDU_Meta IS NOT NULL
+    AND (@familyCode IS NULL OR A.Familia = @familyCode)
     AND (@productCode IS NULL OR A.Artigo = @productCode)
     AND (@brandCode IS NULL OR COALESCE(NULLIF(A.Marca, ''), 'SEM_MARCA') = @brandCode)
 `;
@@ -301,8 +365,8 @@ class VendasService {
       ${buildVendasBaseTempTableQuery(documentTypeWhere)}
 
       SELECT
-        ${metricSelect}
-      FROM #vendasBase;
+        ${documentMetricSelect}
+      FROM #vendasDocuments;
 
       ${buildMonthlyGoalSelect()}
 
@@ -328,6 +392,7 @@ class VendasService {
 
       ${buildOptionSelect('provinceCode', 'provinceName')}
 
+      DROP TABLE #vendasDocuments;
       DROP TABLE #vendasBase;
     `;
 
@@ -393,6 +458,7 @@ class VendasService {
 
       ${buildRankingSelect(rankingDimension)}
 
+      DROP TABLE #vendasDocuments;
       DROP TABLE #vendasBase;
     `;
 

@@ -1096,7 +1096,7 @@ nav button:hover:not(.active) {
 
 .metric-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   align-items: stretch;
   margin-bottom: 18px;
@@ -1295,7 +1295,8 @@ nav button:hover:not(.active) {
 
 .goal-card-content {
   display: grid;
-  gap: 4px;
+  align-content: start;
+  gap: 3px;
   min-width: 0;
   flex: 1;
 }
@@ -1306,11 +1307,11 @@ nav button:hover:not(.active) {
 
 .goal-card-metrics {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 6px;
 }
 
-.goal-card-metrics span {
+.goal-card-metrics > span {
   min-width: 0;
   color: var(--muted);
   font-size: 11px;
@@ -1319,19 +1320,20 @@ nav button:hover:not(.active) {
   text-transform: uppercase;
 }
 
-.goal-card-metrics strong {
+.goal-card-metrics .goal-metric-value {
   display: block;
   margin-top: 3px;
+}
+
+.goal-card-metrics .goal-metric-value > strong {
   color: var(--text);
-  font-size: 13px;
   line-height: 1.12;
-  overflow-wrap: anywhere;
   text-transform: none;
 }
 
 .goal-progress {
   height: 7px;
-  margin-top: 4px;
+  margin-top: 3px;
   overflow: hidden;
   background: #eee5e5;
   border-radius: 99px;
@@ -1346,9 +1348,12 @@ nav button:hover:not(.active) {
 }
 
 .goal-status {
-  margin: 2px 0 0;
+  margin-top: 1px;
   color: var(--accent-strong);
-  font-size: 12px;
+}
+
+.goal-status > strong {
+  color: var(--accent-strong);
   font-weight: 800;
 }
 

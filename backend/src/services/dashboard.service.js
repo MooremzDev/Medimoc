@@ -4,7 +4,9 @@ import { databaseService } from './database.service.js';
 
 const quoteIdentifier = (identifier) => `[${identifier.replace(/]/g, ']]')}]`;
 const artigosTable = `${quoteIdentifier(env.primaveraSchema)}.${quoteIdentifier('Artigo')}`;
+const artigoMoedaTable = `${quoteIdentifier(env.primaveraSchema)}.${quoteIdentifier('ArtigoMoeda')}`;
 const cabecDocTable = `${quoteIdentifier(env.primaveraSchema)}.${quoteIdentifier('CabecDoc')}`;
+const linhasDocTable = `${quoteIdentifier(env.primaveraSchema)}.${quoteIdentifier('LinhasDoc')}`;
 const vendedoresTable = `${quoteIdentifier(env.primaveraSchema)}.${quoteIdentifier('Vendedores')}`;
 const vendorDocumentTypes = env.salesDocumentTypes;
 
@@ -99,9 +101,9 @@ class DashboardService {
       addDashboardInputs(pool.request(), filters).query(`
         SELECT
           COUNT(*) AS documentCount,
-          COALESCE(SUM(TotalMerc), 0) AS netSales,
+          COALESCE(SUM(COALESCE(TotalMerc, 0) - COALESCE(TotalDesc, 0)), 0) AS netSales,
           COALESCE(SUM(TotalIva), 0) AS vatTotal,
-          COALESCE(SUM(TotalMerc + TotalIva), 0) AS grossSales,
+          COALESCE(SUM(TotalDocumento), 0) AS grossSales,
           MIN(Data) AS firstDocumentDate,
           MAX(Data) AS lastDocumentDate
         FROM ${cabecDocTable}
@@ -112,9 +114,9 @@ class DashboardService {
           SELECT
             TipoDoc AS documentType,
             COUNT(*) AS documentCount,
-            COALESCE(SUM(TotalMerc), 0) AS netSales,
+            COALESCE(SUM(COALESCE(TotalMerc, 0) - COALESCE(TotalDesc, 0)), 0) AS netSales,
             COALESCE(SUM(TotalIva), 0) AS vatTotal,
-            COALESCE(SUM(TotalMerc + TotalIva), 0) AS grossSales
+            COALESCE(SUM(TotalDocumento), 0) AS grossSales
           FROM ${cabecDocTable}
           ${salesWhere}
           GROUP BY TipoDoc
@@ -125,26 +127,27 @@ class DashboardService {
           SELECT
             COALESCE(NULLIF(c.RespCobranca, ''), 'SEM_VENDEDOR') AS vendorCode,
             COALESCE(NULLIF(v.Nome, ''), NULLIF(c.RespCobranca, ''), 'Sem vendedor') AS vendorName,
-            COUNT(*) AS documentCount,
-            COALESCE(SUM(c.TotalMerc), 0) AS netSales,
-            COALESCE(SUM(c.TotalIva), 0) AS vatTotal,
-            COALESCE(SUM(c.TotalMerc + c.TotalIva), 0) AS grossSales
+            COUNT(DISTINCT c.Id) AS documentCount,
+            COALESCE(SUM(l.PrecoLiquido), 0) AS netSales,
+            COALESCE(SUM(l.TotalIva), 0) AS vatTotal,
+            COALESCE(SUM(COALESCE(l.PrecoLiquido, 0) + COALESCE(l.TotalIva, 0)), 0) AS grossSales
           FROM ${cabecDocTable} c
+          INNER JOIN ${linhasDocTable} l ON l.IdCabecDoc = c.Id
           LEFT JOIN ${vendedoresTable} v ON v.Vendedor = c.RespCobranca
           ${vendorWhere}
           GROUP BY
             COALESCE(NULLIF(c.RespCobranca, ''), 'SEM_VENDEDOR'),
             COALESCE(NULLIF(v.Nome, ''), NULLIF(c.RespCobranca, ''), 'Sem vendedor')
-          ORDER BY grossSales DESC
+          ORDER BY netSales DESC
         `),
       addDashboardInputs(pool.request(), filters).query(`
           WITH monthlySales AS (
             SELECT TOP (12)
               DATEADD(month, DATEDIFF(month, 0, Data), 0) AS monthStart,
               COUNT(*) AS documentCount,
-              COALESCE(SUM(TotalMerc), 0) AS netSales,
+              COALESCE(SUM(COALESCE(TotalMerc, 0) - COALESCE(TotalDesc, 0)), 0) AS netSales,
               COALESCE(SUM(TotalIva), 0) AS vatTotal,
-              COALESCE(SUM(TotalMerc + TotalIva), 0) AS grossSales
+              COALESCE(SUM(TotalDocumento), 0) AS grossSales
             FROM ${cabecDocTable}
             ${salesWhere}
             GROUP BY DATEADD(month, DATEDIFF(month, 0, Data), 0)
@@ -166,17 +169,35 @@ class DashboardService {
             NumDoc AS documentNumber,
             Entidade AS entityCode,
             Moeda AS currency,
-            TotalMerc AS netSales,
+            COALESCE(TotalMerc, 0) - COALESCE(TotalDesc, 0) AS netSales,
             TotalIva AS vatTotal,
-            TotalMerc + TotalIva AS grossSales
+            TotalDocumento AS grossSales
           FROM ${cabecDocTable}
           ${salesWhere}
           ORDER BY Data DESC, NumDoc DESC
         `),
       pool.request().query(`
           SELECT
-            COALESCE(SUM(TRY_CONVERT(decimal(28, 4), CDU_Meta)), 0) AS monthlyGoal
-          FROM ${artigosTable}
+            COALESCE(SUM(
+              COALESCE(TRY_CONVERT(decimal(28, 4), A.CDU_Meta), 0)
+                * COALESCE(articlePrice.PVP1, 0)
+            ), 0) AS monthlyGoal
+          FROM ${artigosTable} A
+          OUTER APPLY (
+            SELECT TOP (1)
+              COALESCE(TRY_CONVERT(decimal(28, 4), AM.PVP1), 0) AS PVP1
+            FROM ${artigoMoedaTable} AM
+            WHERE AM.Artigo = A.Artigo
+              AND AM.Moeda = 'MT'
+            ORDER BY
+              CASE
+                WHEN AM.Unidade = A.UnidadeVenda THEN 0
+                WHEN AM.Unidade = A.UnidadeBase THEN 1
+                ELSE 2
+              END,
+              AM.Unidade
+          ) articlePrice
+          WHERE A.CDU_Meta IS NOT NULL
         `)
     ]);
 
@@ -232,9 +253,9 @@ class DashboardService {
         c.NumDoc AS documentNumber,
         c.Entidade AS entityCode,
         c.Moeda AS currency,
-        c.TotalMerc AS netSales,
+        COALESCE(c.TotalMerc, 0) - COALESCE(c.TotalDesc, 0) AS netSales,
         c.TotalIva AS vatTotal,
-        c.TotalMerc + c.TotalIva AS grossSales,
+        c.TotalDocumento AS grossSales,
         COALESCE(NULLIF(c.RespCobranca, ''), 'SEM_VENDEDOR') AS vendorCode,
         COALESCE(NULLIF(v.Nome, ''), NULLIF(c.RespCobranca, ''), 'Sem vendedor') AS vendorName
       FROM ${cabecDocTable} c

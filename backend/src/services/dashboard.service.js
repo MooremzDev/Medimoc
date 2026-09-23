@@ -82,6 +82,19 @@ class DashboardService {
     }
 
     const salesWhere = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    const allDocumentTypeWhereClauses = [];
+
+    if (filters.startDate) {
+      allDocumentTypeWhereClauses.push('Data >= @startDate');
+    }
+
+    if (filters.endDate) {
+      allDocumentTypeWhereClauses.push('Data < DATEADD(day, 1, @endDate)');
+    }
+
+    const allDocumentTypesWhere = allDocumentTypeWhereClauses.length
+      ? `WHERE ${allDocumentTypeWhereClauses.join(' AND ')}`
+      : '';
     const vendorDocumentTypePlaceholders = vendorDocumentTypes
       .map((_documentType, index) => `@vendorDocType${index}`)
       .join(', ');
@@ -118,9 +131,9 @@ class DashboardService {
             COALESCE(SUM(TotalIva), 0) AS vatTotal,
             COALESCE(SUM(TotalDocumento), 0) AS grossSales
           FROM ${cabecDocTable}
-          ${salesWhere}
+          ${allDocumentTypesWhere}
           GROUP BY TipoDoc
-          ORDER BY netSales DESC
+          ORDER BY documentCount DESC, TipoDoc
         `),
       addVendorInputs(pool.request(), filters)
         .query(`
@@ -142,7 +155,7 @@ class DashboardService {
         `),
       addDashboardInputs(pool.request(), filters).query(`
           WITH monthlySales AS (
-            SELECT TOP (12)
+            SELECT
               DATEADD(month, DATEDIFF(month, 0, Data), 0) AS monthStart,
               COUNT(*) AS documentCount,
               COALESCE(SUM(COALESCE(TotalMerc, 0) - COALESCE(TotalDesc, 0)), 0) AS netSales,
@@ -151,7 +164,6 @@ class DashboardService {
             FROM ${cabecDocTable}
             ${salesWhere}
             GROUP BY DATEADD(month, DATEDIFF(month, 0, Data), 0)
-            ORDER BY monthStart DESC
           )
           SELECT
             CONVERT(char(7), monthStart, 126) AS month,

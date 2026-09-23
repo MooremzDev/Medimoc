@@ -261,7 +261,7 @@ function SingleLineFitText({ children, className = '', maxSize = 14, minSize = 8
   );
 }
 
-function MonthlyGoalCard({ actualSales, goal, hasResult, loading }) {
+function MonthlyGoalCard({ actualSales, goal, hasResult, loading, showRemaining = false }) {
   const sales = Number(actualSales ?? 0);
   const target = Number(goal ?? 0);
   const hasGoal = target > 0;
@@ -276,13 +276,7 @@ function MonthlyGoalCard({ actualSales, goal, hasResult, loading }) {
       <div className="goal-card-content">
         <p className="eyebrow">Meta mensal</p>
         <h2>{loading ? 'A carregar' : hasResult && hasGoal ? formatPercentage(progress) : 'Sem meta'}</h2>
-        <div className="goal-card-metrics">
-          <span>
-            Realizado
-            <SingleLineFitText className="goal-metric-value" maxSize={13} minSize={9}>
-              {hasResult ? formatAmount(sales) : 'Sem dados'}
-            </SingleLineFitText>
-          </span>
+        <div className="goal-card-metrics single-metric">
           <span>
             Meta
             <SingleLineFitText className="goal-metric-value" maxSize={13} minSize={9}>
@@ -302,9 +296,11 @@ function MonthlyGoalCard({ actualSales, goal, hasResult, loading }) {
             >
               <span style={{ width: `${Math.min(progress, 100)}%` }} />
             </div>
-            <SingleLineFitText className="goal-status" maxSize={12} minSize={9}>
-              {progress >= 100 ? 'Meta atingida' : `Faltam ${formatAmount(remaining)}`}
-            </SingleLineFitText>
+            {showRemaining ? (
+              <SingleLineFitText className="goal-status" maxSize={12} minSize={9}>
+                {progress >= 100 ? 'Meta atingida' : `Faltam ${formatAmount(remaining)}`}
+              </SingleLineFitText>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -512,22 +508,23 @@ function getMonthKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function isAfterMonth(date, referenceDate) {
-  return date.getFullYear() > referenceDate.getFullYear()
-    || (date.getFullYear() === referenceDate.getFullYear() && date.getMonth() > referenceDate.getMonth());
-}
-
 function SalesPieChart({ items }) {
   const segments = (items ?? [])
     .map((item) => ({
       label: item.documentType,
-      value: Number(item.grossSales ?? 0)
+      documents: Number(item.documentCount ?? 0),
+      value: Number(item.grossSales ?? 0),
+      weight: Math.abs(Number(item.grossSales ?? 0))
     }))
-    .filter((item) => item.value > 0);
+    .filter((item) => item.documents > 0);
 
   const total = segments.reduce((sum, item) => sum + item.value, 0);
+  const totalWeight = segments.reduce((sum, item) => sum + item.weight, 0);
+  const chartWeight = totalWeight > 0
+    ? totalWeight
+    : segments.reduce((sum, item) => sum + item.documents, 0);
 
-  if (!segments.length || total <= 0) {
+  if (!segments.length || chartWeight <= 0) {
     return (
       <section className="chart-panel">
         <div className="panel-heading">
@@ -536,7 +533,7 @@ function SalesPieChart({ items }) {
         </div>
         <div className="empty-state">
           <Table2 size={22} aria-hidden="true" />
-          <span>Sem dados positivos para apresentar no gráfico</span>
+          <span>Sem documentos para apresentar no gráfico</span>
         </div>
       </section>
     );
@@ -544,8 +541,9 @@ function SalesPieChart({ items }) {
 
   let cursor = 0;
   const gradientStops = segments.map((segment, index) => {
+    const segmentWeight = totalWeight > 0 ? segment.weight : segment.documents;
     const start = cursor;
-    const end = cursor + (segment.value / total) * 100;
+    const end = cursor + (segmentWeight / chartWeight) * 100;
     cursor = end;
     return `${pieColors[index % pieColors.length]} ${start}% ${end}%`;
   });
@@ -569,14 +567,15 @@ function SalesPieChart({ items }) {
         </div>
         <div className="pie-legend">
           {segments.map((segment, index) => {
-            const percentage = (segment.value / total) * 100;
+            const segmentWeight = totalWeight > 0 ? segment.weight : segment.documents;
+            const percentage = (segmentWeight / chartWeight) * 100;
 
             return (
               <div className="pie-legend-item" key={segment.label}>
                 <span style={{ backgroundColor: pieColors[index % pieColors.length] }} />
                 <strong>{segment.label}</strong>
                 <em>{percentage.toFixed(1)}%</em>
-                <small>{formatAmount(segment.value)}</small>
+                <small>{formatRowCount(segment.documents)} docs · {formatAmount(segment.value)}</small>
               </div>
             );
           })}
@@ -749,16 +748,17 @@ function getSelectedMonthFromRange(dateRange) {
 }
 
 function getComparisonMonthDates(dateRange, referenceDate = new Date()) {
-  const selectedMonth = getSelectedMonthFromRange(dateRange);
-  const currentMonth = getMonthStart(referenceDate);
-  const months = [
-    addMonths(selectedMonth, -1),
-    selectedMonth
-  ];
-  const nextMonth = addMonths(selectedMonth, 1);
+  const fallbackMonth = getMonthStart(referenceDate);
+  const parsedStart = getMonthStart(parseDateInput(dateRange?.startDate) ?? parseDateInput(dateRange?.endDate) ?? fallbackMonth);
+  const parsedEnd = getMonthStart(parseDateInput(dateRange?.endDate) ?? parseDateInput(dateRange?.startDate) ?? fallbackMonth);
+  const startMonth = parsedStart <= parsedEnd ? parsedStart : parsedEnd;
+  const endMonth = parsedStart <= parsedEnd ? parsedEnd : parsedStart;
+  const months = [addMonths(startMonth, -1)];
+  let month = startMonth;
 
-  if (!isAfterMonth(nextMonth, currentMonth)) {
-    months.push(nextMonth);
+  while (month <= endMonth) {
+    months.push(month);
+    month = addMonths(month, 1);
   }
 
   return months;
@@ -775,13 +775,15 @@ function getSalesComparisonDateRange(dateRange) {
   };
 }
 
-function buildSalesComparisonMonths(items, dateRange) {
-  const rowsByMonth = new Map((items ?? []).map((item) => [item.month, item]));
+function buildSalesComparisonMonths(comparisonItems, selectedItems, dateRange) {
+  const comparisonRowsByMonth = new Map((comparisonItems ?? []).map((item) => [item.month, item]));
+  const selectedRowsByMonth = new Map((selectedItems ?? []).map((item) => [item.month, item]));
 
-  return getComparisonMonthDates(dateRange).map((monthDate) => {
+  return getComparisonMonthDates(dateRange).map((monthDate, index) => {
     const month = getMonthKey(monthDate);
+    const row = index === 0 ? comparisonRowsByMonth.get(month) : selectedRowsByMonth.get(month);
 
-    return rowsByMonth.get(month) ?? {
+    return row ?? {
       month,
       documentCount: 0,
       netSales: 0,
@@ -798,7 +800,7 @@ function formatCompactAmount(value) {
   }).format(value ?? 0);
 }
 
-function MonthlySalesLineChart({ activeMonth, goal = 0, items, loading }) {
+function MonthlySalesLineChart({ goal = 0, items, loading }) {
   const monthlySales = (items ?? []).map((item) => ({
     month: item.month,
     documents: Number(item.documentCount ?? 0),
@@ -806,16 +808,17 @@ function MonthlySalesLineChart({ activeMonth, goal = 0, items, loading }) {
   }));
   const target = Number(goal ?? 0);
   const hasGoal = target > 0;
-  const activeMonthSales = monthlySales.find((item) => item.month === activeMonth) ?? monthlySales.at(-1) ?? null;
-  const activeMonthValue = Number(activeMonthSales?.value ?? 0);
-  const goalGap = activeMonthValue - target;
+  const comparisonMonth = monthlySales[0] ?? null;
+  const selectedMonths = monthlySales.slice(1);
+  const selectedPeriodTotal = selectedMonths.reduce((sum, item) => sum + item.value, 0);
+  const comparisonValue = Number(comparisonMonth?.value ?? 0);
 
   if (loading) {
     return (
       <section className="monthly-chart-panel">
         <div className="panel-heading">
           <TrendingUp size={18} aria-hidden="true" />
-          <span>Vendas efetuadas por mês</span>
+          <span>Vendas no período e mês anterior</span>
         </div>
         <div className="empty-state">
           <RefreshCw size={22} aria-hidden="true" />
@@ -830,7 +833,7 @@ function MonthlySalesLineChart({ activeMonth, goal = 0, items, loading }) {
       <section className="monthly-chart-panel">
         <div className="panel-heading">
           <TrendingUp size={18} aria-hidden="true" />
-          <span>Vendas efetuadas por mês</span>
+          <span>Vendas no período e mês anterior</span>
         </div>
         <div className="empty-state">
           <Table2 size={22} aria-hidden="true" />
@@ -875,25 +878,24 @@ function MonthlySalesLineChart({ activeMonth, goal = 0, items, loading }) {
       <div className="monthly-chart-heading">
         <div className="panel-heading">
           <TrendingUp size={18} aria-hidden="true" />
-          <span>Vendas efetuadas por mês</span>
+          <span>Vendas no período e mês anterior</span>
         </div>
-        <div className="monthly-chart-metrics" aria-label="Comparação com a meta mensal">
+        <div className="monthly-chart-metrics" aria-label="Resumo comparativo de vendas">
           <span>
             <i className="chart-legend-dot actual" aria-hidden="true" />
-            Vendas do mês: <strong>{formatAmount(activeMonthValue)}</strong>
+            Período: <strong>{formatAmount(selectedPeriodTotal)}</strong>
+          </span>
+          <span>
+            <i className="chart-legend-dot comparison" aria-hidden="true" />
+            Mês anterior: <strong>{formatAmount(comparisonValue)}</strong>
           </span>
           {hasGoal ? (
-            <>
-              <span>
-                <i className="chart-legend-dot target" aria-hidden="true" />
-                Meta: <strong>{formatAmount(target)}</strong>
-              </span>
-              <span className={goalGap >= 0 ? 'positive' : 'negative'}>
-                {goalGap >= 0 ? 'Acima' : 'Falta'}: <strong>{formatAmount(Math.abs(goalGap))}</strong>
-              </span>
-            </>
+            <span>
+              <i className="chart-legend-dot target" aria-hidden="true" />
+              Meta mensal: <strong>{formatAmount(target)}</strong>
+            </span>
           ) : (
-            <span>Meta: <strong>Sem dados</strong></span>
+            <span>Meta mensal: <strong>Sem dados</strong></span>
           )}
         </div>
       </div>
@@ -921,6 +923,15 @@ function MonthlySalesLineChart({ activeMonth, goal = 0, items, loading }) {
           })}
 
           <path className="line-chart-area" d={areaPath} />
+          {points.length > 1 ? (
+            <line
+              className="line-chart-comparison-divider"
+              x1={(points[0].x + points[1].x) / 2}
+              x2={(points[0].x + points[1].x) / 2}
+              y1={padding.top}
+              y2={baseline}
+            />
+          ) : null}
           {hasGoal ? (
             <>
               <line
@@ -937,8 +948,8 @@ function MonthlySalesLineChart({ activeMonth, goal = 0, items, loading }) {
           ) : null}
           <path className="line-chart-line" d={linePath} />
 
-          {points.map((point) => (
-            <g className="line-chart-point" key={point.month}>
+          {points.map((point, index) => (
+            <g className={`line-chart-point ${index === 0 ? 'comparison' : ''}`} key={point.month}>
               <title>
                 {hasGoal
                   ? `${formatMonthLabel(point.month)}: ${formatAmount(point.value)} de ${formatAmount(target)} (${point.documents} documentos)`
@@ -1654,12 +1665,10 @@ function SalesPage({
   const breakdowns = salesDashboard.data?.breakdowns ?? {};
   const filterOptions = salesDashboard.data?.filterOptions ?? {};
   const documentCount = Number(summary?.documentCount ?? 0);
-  const lineCount = Number(summary?.lineCount ?? 0);
   const netSales = Number(summary?.netSales ?? 0);
   const grossSales = Number(summary?.grossSales ?? 0);
   const vatTotal = Number(summary?.vatTotal ?? 0);
   const monthlyGoal = Number(salesDashboard.data?.monthlyGoal ?? 0);
-  const averageDocumentValue = documentCount > 0 ? grossSales / documentCount : 0;
   const hasResult = Boolean(salesDashboard.data);
   const rankingDimension = activeView === 'summary' ? 'vendors' : activeView;
 
@@ -1667,7 +1676,6 @@ function SalesPage({
     <section className="sales-page">
       <div className="section-heading sales-page-heading">
         <div>
-          <p className="eyebrow">Vendas</p>
           <h2>Gestão de vendas</h2>
         </div>
         <div className="sales-heading-actions">
@@ -1704,28 +1712,28 @@ function SalesPage({
               label="Vendas sem IVA"
               value={salesDashboard.loading ? 'A carregar' : formatAmount(netSales)}
               tone="success"
-              detail={hasResult ? `Mercadoria menos desconto em ${activePeriodLabel}` : 'Sem vendas disponíveis no período'}
+              detail="Total de vendas sem IVA"
             />
             <StatusCard
               icon={ReceiptText}
               label="Vendas com IVA"
               value={salesDashboard.loading ? 'A carregar' : formatAmount(grossSales)}
               tone="neutral"
-              detail={hasResult ? `Total do documento em ${activePeriodLabel}` : 'Sem vendas disponíveis no período'}
+              detail="Total de vendas com IVA"
             />
             <StatusCard
               icon={Percent}
               label="IVA"
               value={salesDashboard.loading ? 'A carregar' : formatAmount(vatTotal)}
               tone="neutral"
-              detail={hasResult ? `IVA liquidado em ${activePeriodLabel}` : 'Sem IVA disponível no período'}
+              detail="Total de IVA"
             />
             <StatusCard
               icon={FileText}
               label="Documentos"
               value={salesDashboard.loading ? 'A carregar' : formatRowCount(documentCount)}
               tone="neutral"
-              detail={hasResult ? `${formatRowCount(lineCount)} linhas · ticket médio ${formatAmount(averageDocumentValue)}` : 'Sem documentos disponíveis'}
+              detail="Total de documentos"
             />
           </div>
 
@@ -1810,7 +1818,7 @@ function ClientesStatusCard({ active, count, segment, loading, onSelectSegment }
 
   return (
     <button
-      className={`customer-status-card ${active ? 'active' : ''}`}
+      className={`customer-status-card segment-${segment.key} ${active ? 'active' : ''}`}
       type="button"
       onClick={() => onSelectSegment(segment.key)}
       disabled={loading}
@@ -1917,7 +1925,6 @@ function ClientesPage({
     <section className="customers-page">
       <div className="section-heading customers-page-heading">
         <div>
-          <p className="eyebrow">Clientes</p>
           <h2>Gestão de clientes</h2>
         </div>
         <span className="pill">{selectedSegmentLabel}</span>
@@ -2088,7 +2095,11 @@ export default function App() {
         getSalesDashboard(filters),
         getSalesDashboard(comparisonDateRange)
       ]);
-      const comparisonMonths = buildSalesComparisonMonths(comparisonResponse.data?.byMonth, filters);
+      const comparisonMonths = buildSalesComparisonMonths(
+        comparisonResponse.data?.byMonth,
+        response.data?.byMonth,
+        filters
+      );
 
       setDashboard({
         loading: false,
@@ -2597,18 +2608,14 @@ export default function App() {
                 label="Vendas sem IVA"
                 value={generalSalesDashboard.loading ? 'A carregar' : formatAmount(generalSalesSummary?.netSales)}
                 tone="success"
-                detail={generalSalesDashboard.data
-                  ? `Mercadoria menos desconto em ${generalActivePeriodLabel}`
-                  : 'Sem vendas disponíveis no período'}
+                detail="Total de vendas sem IVA"
               />
               <StatusCard
                 icon={ReceiptText}
                 label="Vendas com IVA"
                 value={generalSalesDashboard.loading ? 'A carregar' : formatAmount(generalSalesSummary?.grossSales)}
                 tone="neutral"
-                detail={generalSalesDashboard.data
-                  ? `Total dos documentos em ${generalActivePeriodLabel}`
-                  : 'Sem vendas disponíveis no período'}
+                detail="Total de vendas com IVA"
               />
               <StatusCard
                 icon={Table2}
@@ -2619,20 +2626,18 @@ export default function App() {
                     : formatRowCount(generalSalesSummary?.documentCount ?? 0)
                 }
                 tone="neutral"
-                detail={generalSalesDashboard.data
-                  ? `Documentos emitidos no período ${generalActivePeriodLabel}`
-                  : 'Sem documentos disponíveis no período'}
+                detail="Total de documentos"
               />
               <MonthlyGoalCard
                 actualSales={generalActiveMonthSales}
                 goal={generalMonthlyGoal}
                 hasResult={Boolean(generalSalesDashboard.data)}
                 loading={generalSalesDashboard.loading}
+                showRemaining
               />
             </div>
 
             <MonthlySalesLineChart
-              activeMonth={generalActiveMonth}
               goal={generalMonthlyGoal}
               items={generalSalesComparisonMonths}
               loading={generalSalesDashboard.loading}

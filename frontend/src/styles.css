@@ -1174,6 +1174,24 @@ nav button:hover:not(.active) {
   margin-bottom: 18px;
 }
 
+.sales-distribution-panel {
+  display: flex;
+  flex-direction: column;
+  height: 430px;
+}
+
+.sales-distribution-panel .pie-layout {
+  flex: 1;
+  min-height: 0;
+}
+
+.sales-distribution-panel .pie-legend {
+  max-height: 330px;
+  overflow-y: auto;
+  padding-right: 5px;
+  scrollbar-gutter: stable;
+}
+
 .vendor-panel {
   margin-bottom: 0;
 }
@@ -2037,6 +2055,24 @@ td {
     grid-template-columns: 1fr;
   }
 
+  .sales-distribution-panel {
+    height: 560px;
+  }
+
+  .sales-distribution-panel .pie-layout {
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .sales-distribution-panel .pie-chart {
+    justify-self: center;
+  }
+
+  .sales-distribution-panel .pie-legend {
+    width: 100%;
+    max-height: none;
+  }
+
   .bar-row {
     grid-template-columns: minmax(140px, 220px) minmax(120px, 1fr) 116px;
   }
@@ -2160,6 +2196,14 @@ td {
 
   .pie-legend {
     grid-template-columns: 1fr;
+  }
+
+  .sales-distribution-panel {
+    height: 500px;
+  }
+
+  .sales-distribution-panel .pie-chart {
+    width: min(100%, 190px);
   }
 
   .dashboard-details .detail-panel {

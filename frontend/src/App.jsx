@@ -526,7 +526,7 @@ function SalesPieChart({ items }) {
 
   if (!segments.length || chartWeight <= 0) {
     return (
-      <section className="chart-panel">
+      <section className="chart-panel sales-distribution-panel">
         <div className="panel-heading">
           <Activity size={18} aria-hidden="true" />
           <span>Distribuição das vendas</span>
@@ -549,7 +549,7 @@ function SalesPieChart({ items }) {
   });
 
   return (
-    <section className="chart-panel">
+    <section className="chart-panel sales-distribution-panel">
       <div className="panel-heading">
         <Activity size={18} aria-hidden="true" />
         <span>Distribuição das vendas com IVA por tipo</span>

@@ -82,19 +82,6 @@ class DashboardService {
     }
 
     const salesWhere = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    const allDocumentTypeWhereClauses = [];
-
-    if (filters.startDate) {
-      allDocumentTypeWhereClauses.push('Data >= @startDate');
-    }
-
-    if (filters.endDate) {
-      allDocumentTypeWhereClauses.push('Data < DATEADD(day, 1, @endDate)');
-    }
-
-    const allDocumentTypesWhere = allDocumentTypeWhereClauses.length
-      ? `WHERE ${allDocumentTypeWhereClauses.join(' AND ')}`
-      : '';
     const vendorDocumentTypePlaceholders = vendorDocumentTypes
       .map((_documentType, index) => `@vendorDocType${index}`)
       .join(', ');
@@ -131,7 +118,7 @@ class DashboardService {
             COALESCE(SUM(TotalIva), 0) AS vatTotal,
             COALESCE(SUM(TotalDocumento), 0) AS grossSales
           FROM ${cabecDocTable}
-          ${allDocumentTypesWhere}
+          ${salesWhere}
           GROUP BY TipoDoc
           ORDER BY documentCount DESC, TipoDoc
         `),

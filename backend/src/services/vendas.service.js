@@ -72,7 +72,7 @@ const addVendasInputs = (request, params, dateRange) => {
 
 const metricSelect = `
   COUNT(DISTINCT documentId) AS documentCount,
-  COUNT(*) AS lineCount,
+  COUNT(lineId) AS lineCount,
   COALESCE(SUM(quantity), 0) AS quantity,
   COALESCE(SUM(netSales), 0) AS netSales,
   COALESCE(SUM(vatTotal), 0) AS vatTotal,
@@ -178,6 +178,7 @@ const buildVendasBaseTempTableQuery = (documentTypeWhere) => `
 
   SELECT
     C.Id AS documentId,
+    L.Id AS lineId,
     C.Data AS documentDate,
     C.TipoDoc AS documentType,
     C.NumDoc AS documentNumber,
@@ -207,10 +208,10 @@ const buildVendasBaseTempTableQuery = (documentTypeWhere) => `
     COALESCE(L.PrecoLiquido, 0) + COALESCE(L.TotalIva, 0) AS grossSales
   INTO #vendasBase
   FROM ${tables.cabecDoc} C
-  INNER JOIN ${tables.clientes} Cl ON C.Entidade = Cl.Cliente
-  INNER JOIN ${tables.linhasDoc} L ON C.Id = L.IdCabecDoc
-  INNER JOIN ${tables.artigos} A ON L.Artigo = A.Artigo
-  INNER JOIN ${tables.familias} F ON F.Familia = A.Familia
+  LEFT JOIN ${tables.clientes} Cl ON C.Entidade = Cl.Cliente
+  LEFT JOIN ${tables.linhasDoc} L ON C.Id = L.IdCabecDoc
+  LEFT JOIN ${tables.artigos} A ON L.Artigo = A.Artigo
+  LEFT JOIN ${tables.familias} F ON F.Familia = A.Familia
   OUTER APPLY (
     SELECT TOP (1)
       COALESCE(TRY_CONVERT(decimal(28, 4), AM.PVP1), 0) AS PVP1
@@ -245,7 +246,7 @@ const buildVendasBaseTempTableQuery = (documentTypeWhere) => `
   SELECT
     documentId,
     MAX(documentDate) AS documentDate,
-    COUNT(*) AS lineCount,
+    COUNT(lineId) AS lineCount,
     COALESCE(SUM(quantity), 0) AS quantity,
     MAX(documentNetSales) AS netSales,
     MAX(documentVatTotal) AS vatTotal,

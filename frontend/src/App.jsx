@@ -14,6 +14,8 @@
   FileText,
   MapPin,
   Package,
+  PanelLeftClose,
+  PanelLeftOpen,
   Percent,
   Play,
   RefreshCw,
@@ -1970,6 +1972,7 @@ function ClientesPage({
 
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [health, setHealth] = useState({ status: 'idle', data: null, error: null });
   const [database, setDatabase] = useState({ status: 'idle', data: null, error: null });
@@ -2474,16 +2477,29 @@ export default function App() {
   }, [activePage]);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside className="sidebar" aria-label="Navegação principal">
         <div className="brand">
           <div className="brand-mark">
             <img src="/medimoc-logo.png" alt="Medimoc" />
           </div>
-          <div>
+          <div className="brand-copy">
             <strong>Medimoc</strong>
           </div>
         </div>
+
+        <button
+          className="sidebar-collapse-button"
+          type="button"
+          onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+          aria-label={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
+          aria-expanded={!sidebarCollapsed}
+          title={sidebarCollapsed ? 'Expandir menu' : 'Recolher menu'}
+        >
+          {sidebarCollapsed
+            ? <PanelLeftOpen size={17} aria-hidden="true" />
+            : <PanelLeftClose size={17} aria-hidden="true" />}
+        </button>
 
         <nav className="primary-navigation">
           {primaryNavigationItems.map((item) => {
@@ -2493,6 +2509,7 @@ export default function App() {
               <button
                 className={activePage === item.key ? 'active' : ''}
                 key={item.key}
+                title={sidebarCollapsed ? item.label : undefined}
                 type="button"
                 onClick={() => {
                   setActivePage(item.key);
@@ -2500,7 +2517,7 @@ export default function App() {
                 }}
               >
                 <Icon size={18} aria-hidden="true" />
-                {item.label}
+                <span className="nav-label">{item.label}</span>
               </button>
             );
           })}
@@ -2516,6 +2533,7 @@ export default function App() {
                   <button
                     className={activePage === item.key ? 'active' : ''}
                     key={item.key}
+                    title={sidebarCollapsed ? item.label : undefined}
                     type="button"
                     onClick={() => {
                       setActivePage(item.key);
@@ -2523,7 +2541,7 @@ export default function App() {
                     }}
                   >
                     <Icon size={18} aria-hidden="true" />
-                    {item.label}
+                    <span className="nav-label">{item.label}</span>
                   </button>
                 );
               })}
@@ -2536,9 +2554,10 @@ export default function App() {
             onClick={() => setSettingsOpen((isOpen) => !isOpen)}
             aria-expanded={settingsOpen}
             aria-controls="settings-navigation"
+            title={sidebarCollapsed ? 'Definições' : undefined}
           >
             <Settings size={18} aria-hidden="true" />
-            Definições
+            <span className="nav-label">Definições</span>
           </button>
         </div>
       </aside>

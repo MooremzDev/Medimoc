@@ -54,9 +54,11 @@ button {
   grid-template-columns: 264px minmax(0, 1fr);
   min-height: 100vh;
   background: #ffffff;
+  transition: grid-template-columns 180ms ease;
 }
 
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 32px;
@@ -64,6 +66,84 @@ button {
   color: var(--text);
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border);
+}
+
+.sidebar-collapse-button {
+  position: absolute;
+  top: 30px;
+  right: -15px;
+  z-index: 6;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  place-items: center;
+  color: var(--accent-strong);
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  box-shadow: 0 7px 18px rgba(32, 26, 28, 0.12);
+}
+
+.sidebar-collapse-button:hover {
+  color: #ffffff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (min-width: 981px) {
+  .app-shell.sidebar-collapsed {
+    grid-template-columns: 84px minmax(0, 1fr);
+  }
+
+  .sidebar-collapsed .sidebar {
+    gap: 28px;
+    padding: 24px 14px;
+  }
+
+  .sidebar-collapsed .brand {
+    justify-content: center;
+  }
+
+  .sidebar-collapsed .brand-mark {
+    width: 46px;
+    height: 42px;
+  }
+
+  .sidebar-collapsed .brand-mark img {
+    width: 42px;
+    height: 36px;
+  }
+
+  .sidebar-collapsed .brand-copy,
+  .sidebar-collapsed .nav-label {
+    display: none;
+  }
+
+  .sidebar-collapsed nav button,
+  .sidebar-collapsed .settings-trigger {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .sidebar-collapsed .settings-navigation {
+    position: absolute;
+    bottom: 0;
+    left: calc(100% + 12px);
+    z-index: 20;
+    width: 230px;
+    margin: 0;
+    box-shadow: var(--shadow);
+  }
+
+  .sidebar-collapsed .settings-navigation .nav-label {
+    display: inline;
+  }
+
+  .sidebar-collapsed .settings-navigation button {
+    justify-content: flex-start;
+    padding-inline: 12px;
+  }
 }
 
 .brand {
@@ -1968,6 +2048,10 @@ td {
 }
 
 @media (max-width: 980px) {
+  .sidebar-collapse-button {
+    display: none;
+  }
+
   .app-shell {
     grid-template-columns: 1fr;
   }

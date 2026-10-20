@@ -19,7 +19,13 @@ const hasFrontendBuild = fs.existsSync(frontendIndexPath);
 
 app.disable('x-powered-by');
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      'upgrade-insecure-requests': null
+    }
+  }
+}));
 app.use(express.json({ limit: env.jsonBodyLimit }));
 app.use(requestLogger);
 

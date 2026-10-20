@@ -36,6 +36,7 @@
   X
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { API_BASE_URL } from './config/api.js';
 import {
   executeSelectQuery,
   getClientesDashboard,
@@ -2011,7 +2012,7 @@ export default function App() {
   const [maxRows, setMaxRows] = useState(100);
   const [queryState, setQueryState] = useState({ loading: false, result: null, error: null });
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
+  const apiBaseUrl = API_BASE_URL;
   const appName = import.meta.env.VITE_APP_NAME || 'Painel Primavera Medimoc';
   const activePageInfo = pages[activePage] ?? pages.dashboard;
   const ActivePageIcon = activePageInfo.icon;

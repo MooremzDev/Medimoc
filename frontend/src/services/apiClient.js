@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+import { API_BASE_URL } from '../config/api.js';
 
 export class ApiError extends Error {
   constructor(message, status, details) {
@@ -18,7 +18,10 @@ const request = async (path, options = {}) => {
     ...options
   });
 
-  const payload = await response.json().catch(() => null);
+  const responseContentType = response.headers.get('content-type') ?? '';
+  const payload = responseContentType.includes('application/json')
+    ? await response.json().catch(() => null)
+    : null;
 
   if (!response.ok) {
     throw new ApiError(

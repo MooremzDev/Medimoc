@@ -61,6 +61,7 @@ const defaultVendasFilters = {
   brandCode: '',
   province: ''
 };
+const AUTO_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const createSalesDashboardState = () => ({ loading: false, data: null, error: null });
 const createVendorDocumentsState = () => ({ loading: false, rows: [], error: null });
 const createClientesDashboardState = () => ({ loading: false, data: null, error: null });
@@ -1973,6 +1974,7 @@ function ClientesPage({
 export default function App() {
   const [activePage, setActivePage] = useState('dashboard');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const autoRefreshInFlight = useRef(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [health, setHealth] = useState({ status: 'idle', data: null, error: null });
   const [database, setDatabase] = useState({ status: 'idle', data: null, error: null });
@@ -2084,13 +2086,16 @@ export default function App() {
 
   const loadSalesDashboardData = async ({
     filters,
+    silent = false,
     setDashboard,
     setSelectedVendor,
     setVendorDocuments
   }) => {
-    setDashboard((current) => ({ ...current, loading: true, error: null }));
-    setSelectedVendor?.(null);
-    setVendorDocuments?.(createVendorDocumentsState());
+    if (!silent) {
+      setDashboard((current) => ({ ...current, loading: true, error: null }));
+      setSelectedVendor?.(null);
+      setVendorDocuments?.(createVendorDocumentsState());
+    }
 
     try {
       const comparisonDateRange = getSalesComparisonDateRange(filters);
@@ -2113,19 +2118,26 @@ export default function App() {
         error: null
       });
     } catch (error) {
-      setDashboard({ loading: false, data: null, error: error.message });
+      setDashboard((current) => ({
+        loading: false,
+        data: silent ? current.data : null,
+        error: error.message
+      }));
     }
   };
 
-  const loadGeneralSalesDashboard = (filters = generalSalesDateRange) => loadSalesDashboardData({
+  const loadGeneralSalesDashboard = (filters = generalSalesDateRange, { silent = false } = {}) => loadSalesDashboardData({
     filters,
+    silent,
     setDashboard: setGeneralSalesDashboard,
     setSelectedVendor: setGeneralSelectedVendor,
     setVendorDocuments: setGeneralVendorDocuments
   });
 
-  const loadVendasSalesDashboard = async (period = vendasPeriod, filters = vendasFilters) => {
-    setVendasSalesDashboard((current) => ({ ...current, loading: true, error: null }));
+  const loadVendasSalesDashboard = async (period = vendasPeriod, filters = vendasFilters, { silent = false } = {}) => {
+    if (!silent) {
+      setVendasSalesDashboard((current) => ({ ...current, loading: true, error: null }));
+    }
 
     try {
       const response = await getVendasDashboard({
@@ -2141,7 +2153,11 @@ export default function App() {
         error: null
       });
     } catch (error) {
-      setVendasSalesDashboard({ loading: false, data: null, error: error.message });
+      setVendasSalesDashboard((current) => ({
+        loading: false,
+        data: silent ? current.data : null,
+        error: error.message
+      }));
     }
   };
 
@@ -2149,13 +2165,16 @@ export default function App() {
     dimension = vendasView,
     filters = vendasFilters,
     page = vendasRankingPages[dimension] ?? 1,
-    period = vendasPeriod
+    period = vendasPeriod,
+    silent = false
   } = {}) => {
     if (dimension === 'summary') {
       return;
     }
 
-    setVendasRankingDashboard((current) => ({ ...current, loading: true, error: null }));
+    if (!silent) {
+      setVendasRankingDashboard((current) => ({ ...current, loading: true, error: null }));
+    }
 
     try {
       const response = await getVendasRanking({
@@ -2172,12 +2191,18 @@ export default function App() {
         error: null
       });
     } catch (error) {
-      setVendasRankingDashboard({ loading: false, data: null, error: error.message });
+      setVendasRankingDashboard((current) => ({
+        loading: false,
+        data: silent ? current.data : null,
+        error: error.message
+      }));
     }
   };
 
-  const loadClientesDashboard = async (segment = clientesSegment, page = clientesPage) => {
-    setClientesDashboard((current) => ({ ...current, loading: true, error: null }));
+  const loadClientesDashboard = async (segment = clientesSegment, page = clientesPage, { silent = false } = {}) => {
+    if (!silent) {
+      setClientesDashboard((current) => ({ ...current, loading: true, error: null }));
+    }
 
     try {
       const response = await getClientesDashboard({
@@ -2192,18 +2217,25 @@ export default function App() {
         error: null
       });
     } catch (error) {
-      setClientesDashboard({ loading: false, data: null, error: error.message });
+      setClientesDashboard((current) => ({
+        loading: false,
+        data: silent ? current.data : null,
+        error: error.message
+      }));
     }
   };
 
   const loadVendorDocumentsForView = async ({
     dateRange,
+    silent = false,
     setSelectedVendor,
     setVendorDocuments,
     vendor
   }) => {
-    setSelectedVendor(vendor);
-    setVendorDocuments({ loading: true, rows: [], error: null });
+    if (!silent) {
+      setSelectedVendor(vendor);
+      setVendorDocuments({ loading: true, rows: [], error: null });
+    }
 
     try {
       const response = await getVendorDocuments({
@@ -2219,7 +2251,11 @@ export default function App() {
         error: null
       });
     } catch (error) {
-      setVendorDocuments({ loading: false, rows: [], error: error.message });
+      setVendorDocuments((current) => ({
+        loading: false,
+        rows: silent ? current.rows : [],
+        error: error.message
+      }));
     }
   };
 
@@ -2235,9 +2271,11 @@ export default function App() {
     setGeneralVendorDocuments(createVendorDocumentsState());
   };
 
-  const selectDatabaseTable = async (table, limit = previewLimit) => {
+  const selectDatabaseTable = async (table, limit = previewLimit, { silent = false } = {}) => {
     setSelectedTable(table);
-    setTablePreview({ loading: true, columns: [], result: null, error: null });
+    if (!silent) {
+      setTablePreview({ loading: true, columns: [], result: null, error: null });
+    }
 
     try {
       const request = {
@@ -2256,12 +2294,12 @@ export default function App() {
         error: null
       });
     } catch (error) {
-      setTablePreview({
+      setTablePreview((current) => ({
         loading: false,
-        columns: [],
-        result: null,
+        columns: silent ? current.columns : [],
+        result: silent ? current.result : null,
         error: error.message
-      });
+      }));
     }
   };
 
@@ -2475,6 +2513,97 @@ export default function App() {
       loadClientesDashboard();
     }
   }, [activePage]);
+
+  useEffect(() => {
+    const refreshActiveData = async () => {
+      if (document.hidden || autoRefreshInFlight.current) {
+        return;
+      }
+
+      autoRefreshInFlight.current = true;
+
+      try {
+        if (activePage === 'dashboard') {
+          const requests = [loadGeneralSalesDashboard(generalSalesDateRange, { silent: true })];
+
+          if (generalSelectedVendor) {
+            requests.push(loadVendorDocumentsForView({
+              dateRange: generalActiveSalesDateRange,
+              silent: true,
+              setSelectedVendor: setGeneralSelectedVendor,
+              setVendorDocuments: setGeneralVendorDocuments,
+              vendor: generalSelectedVendor
+            }));
+          }
+
+          await Promise.all(requests);
+          return;
+        }
+
+        if (activePage === 'sales') {
+          const requests = [loadVendasSalesDashboard(vendasPeriod, vendasFilters, { silent: true })];
+
+          if (vendasView !== 'summary') {
+            requests.push(loadVendasRanking({
+              dimension: vendasView,
+              filters: vendasFilters,
+              page: vendasActiveRankingPage,
+              period: vendasPeriod,
+              silent: true
+            }));
+          }
+
+          await Promise.all(requests);
+          return;
+        }
+
+        if (activePage === 'customers') {
+          await loadClientesDashboard(clientesSegment, clientesPage, { silent: true });
+          return;
+        }
+
+        if (activePage === 'data' && selectedTable) {
+          await selectDatabaseTable(selectedTable, previewLimit, { silent: true });
+        }
+      } finally {
+        autoRefreshInFlight.current = false;
+      }
+    };
+
+    const intervalId = window.setInterval(refreshActiveData, AUTO_REFRESH_INTERVAL_MS);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshActiveData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [
+    activePage,
+    clientesPage,
+    clientesSegment,
+    generalActiveSalesDateRange.endDate,
+    generalActiveSalesDateRange.startDate,
+    generalSalesDateRange.endDate,
+    generalSalesDateRange.startDate,
+    generalSelectedVendor?.code,
+    previewLimit,
+    selectedTable?.schemaName,
+    selectedTable?.tableName,
+    vendasActiveRankingPage,
+    vendasFilters.brandCode,
+    vendasFilters.familyCode,
+    vendasFilters.productCode,
+    vendasFilters.province,
+    vendasFilters.vendorCode,
+    vendasPeriod,
+    vendasView
+  ]);
 
   return (
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
